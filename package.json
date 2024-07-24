@@ -1,5 +1,5 @@
 {
-  "name": "koishi-plugin-sd-webui-api",
+  "name": "@kxy051/koishi-plugin-sd-webui-api",
   "description": "对接Stable Diffusion",
   "version": "0.0.1",
   "main": "lib/index.js",
@@ -8,15 +8,31 @@
     "lib",
     "dist"
   ],
+  "contributors": [
+    "kxy051 <a2483654847@gmail.com>"
+  ],
+  "homepage": "https://github.com/Kxy051/koishi-plugin-sd-webui-api",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kxy051/koishi-plugin-sd-webui-api.git"
+  },
   "license": "MIT",
-  "scripts": {},
   "keywords": [
     "chatbot",
     "koishi",
-    "plugin"
+    "plugin",
+    "Stable Diffusion",
+    "api"
   ],
-  "devDependencies": {},
   "peerDependencies": {
     "koishi": "^4.17.9"
+  },
+  "koishi": {
+    "service": {
+      "required": ["http"],
+      "optional": ["puppeteer"]
+    },
+    "preview": true,
+    "hidden": true
   }
 }
