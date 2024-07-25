@@ -29,8 +29,12 @@
   },
   "koishi": {
     "service": {
-      "required": ["http"],
-      "optional": ["puppeteer"]
+      "required": [
+        "http"
+      ],
+      "optional": [
+        "puppeteer"
+      ]
     },
     "preview": true,
     "hidden": true
