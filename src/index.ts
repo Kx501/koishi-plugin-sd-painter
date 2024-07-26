@@ -12,6 +12,32 @@ export * from './config'
 
 // 插件主函数
 export async function apply(ctx: Context, config: Config) {
+  // 并发控制
+  const queue: (() => void)[] = [];
+  let activeCount = 0;
+
+  async function runWithConcurrencyLimit(fn: () => Promise<any>, session: Session): Promise<any> {
+    if (activeCount < config.maxConcurrency) {
+      activeCount++;
+      const result = await fn();
+      activeCount--;
+      if (queue.length > 0) {
+        const nextFn = queue.shift();
+        if (nextFn) nextFn();
+      }
+      return result;
+    } else {
+      // 提示用户当前正在排队
+      session.send('当前请求已达到最大并发限制，您的请求已加入队列，请稍候...');
+      return new Promise((resolve) => {
+        queue.push(async () => {
+          const result = await fn();
+          resolve(result);
+        });
+      });
+    }
+  }
+
   // 注册指令
   ctx.command('sd <prompt:text>', '提示词，首尾用引号括起来或放在参数最后')
     .option('negative', '-n <tags:text> 负向提示词，首尾用引号括起来或放在参数最后')
@@ -27,128 +53,130 @@ export async function apply(ctx: Context, config: Config) {
     .option('hiresFix', '-H 启用高分辨率修复')
     .option('noTranslate', '-T 禁止使用翻译服务')
     .action(async ({ options, session }, pPrompt) => {
-      // 计算耗时
-      let start = performance.now();
-      try {
-        log.debug('传入提示词:', pPrompt);
-        log.debug('调用子指令:', options);
+      return runWithConcurrencyLimit(async () => {
+        // 计算耗时
+        let start = performance.now();
+        try {
+          log.debug('传入提示词:', pPrompt);
+          log.debug('调用子指令:', options);
 
-        // 直接从config对象中读取配置
-        const { endpoint, imageSize, sampler, scheduler, clipSkip, cfgScale, txt2imgSteps, maxSteps, prompt, negativePrompt, promptPrepend, negativePromptPrepend, hiresFix, save, useTranslation } = config;
+          // 直接从config对象中读取配置
+          const { endpoint, imageSize, sampler, scheduler, clipSkip, cfgScale, txt2imgSteps, maxSteps, prompt, negativePrompt, promptPrepend, negativePromptPrepend, hiresFix, save, useTranslation } = config;
 
-        // 用户选项覆盖默认配置
-        const steps = options.steps || txt2imgSteps;
-        const cfg = options.cfg || cfgScale;
-        const size = options.size ? options.size.split('x').map(Number) : imageSize;
-        const seed = options.seed || -1;
-        const samplerName = options.sampler || sampler;
-        const schedulerName = options.scheduler || scheduler;
-        const hr = options.hiresFix || hiresFix;
-        const modelVae = options.modelVae || '';
+          // 用户选项覆盖默认配置
+          const steps = options.steps || txt2imgSteps;
+          const cfg = options.cfg || cfgScale;
+          const size = options.size ? options.size.split('x').map(Number) : imageSize;
+          const seed = options.seed || -1;
+          const samplerName = options.sampler || sampler;
+          const schedulerName = options.scheduler || scheduler;
+          const hr = options.hiresFix || hiresFix;
+          const modelVae = options.modelVae || '';
 
-        // 解析 modelVae 参数
-        let [modelName, vaeName, temp] = modelVae.split(' ');
-        let isTemporary = temp === 'Y'; // 默认为 true，只有当 temp 为 'Y' 时才为 true
+          // 解析 modelVae 参数
+          let [modelName, vaeName, temp] = modelVae.split(' ');
+          let isTemporary = temp === 'Y'; // 默认为 true，只有当 temp 为 'Y' 时才为 true
 
-        // 如果 temp 未提供，则 isTemporary 保持默认值 true
-        if (temp === undefined) {
-          isTemporary = true;
-        }
-
-        log.debug('最终参数:', { steps, cfg, size, samplerName, schedulerName, modelVae });
-
-        let tempPrompt = pPrompt,
-          tempNegativePrompt = options.negative;
-
-        // 构建最终的prompt和negativePrompt
-        if (config.useTranslation && !options.noTranslate && ctx.translator) {
-          // 翻译
-          tempPrompt = await translateZH(ctx, tempPrompt);
-
-          log.debug('提示词翻译为:', tempPrompt);
-
-          if (options.negative !== undefined) {
-            tempNegativePrompt = await translateZH(ctx, tempNegativePrompt);
-
-            log.debug('负向提示词翻译为:', tempNegativePrompt);
+          // 如果 temp 未提供，则 isTemporary 保持默认值 true
+          if (temp === undefined) {
+            isTemporary = true;
           }
-          log.debug('所有翻译任务完成');
-        }
 
-        let finalPrompt = promptPrepend ? prompt : '';
-        finalPrompt += tempPrompt;
-        finalPrompt += promptPrepend ? '' : prompt;
+          log.debug('最终参数:', { steps, cfg, size, samplerName, schedulerName, modelVae });
 
-        let finalNegativePrompt = negativePromptPrepend ? negativePrompt : '';
-        finalNegativePrompt += tempNegativePrompt || '';
-        finalNegativePrompt += negativePromptPrepend ? '' : negativePrompt;
+          let tempPrompt = pPrompt,
+            tempNegativePrompt = options.negative;
 
-        log.debug('最终提示词:', finalPrompt, '负向:', finalNegativePrompt);
+          // 构建最终的prompt和negativePrompt
+          if (useTranslation && !options.noTranslate && ctx.translator) {
+            // 翻译
+            tempPrompt = await translateZH(ctx, tempPrompt);
 
-        // 构建API请求体
-        const request = {
-          prompt: finalPrompt,
-          negative_prompt: finalNegativePrompt,
-          steps: Math.min(steps, maxSteps),
-          cfg_scale: cfg,
-          width: size[0],
-          height: size[1],
-          seed: seed,
-          sampler_name: samplerName,
-          scheduler: schedulerName,
-          clip_skip: clipSkip,
-          enable_hr: hr,
-          save_images: save,
-          override_settings: {
-            sd_model_checkpoint: modelName,
-            ...(vaeName && { sd_vae: vaeName }),  // 只有当提供了 VAE 名称时才添加
-          },
-          override_settings_restore_afterwards: isTemporary,
-        };
+            log.debug('提示词翻译为:', tempPrompt);
 
-        log.debug('API请求体:', request);
+            if (options.negative !== undefined) {
+              tempNegativePrompt = await translateZH(ctx, tempNegativePrompt);
 
-        // 随机发送一条消息
-        session.send(Random.pick([
-          '在画了在画了',
-          '你就在此地不要走动，等我给你画一幅',
-          '少女绘画中……',
-          '正在创作中，请稍等片刻',
-          '笔墨已备好，画卷即将展开'
-        ]));
-
-        // 调用API
-        const response = await ctx.http.post(`${endpoint}/sdapi/v1/txt2img`, request, {
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        // log.debug('API response data:', response);
-
-        // 发送图片缓冲区
-        const imgBuffer = Buffer.from(response.images[0], 'base64');
-
-        if (config.outputMethod === '图片和关键信息') {
-          session.send(`步数:${steps}, 引导:${cfg}, 尺寸:${size}, 采样:${samplerName}, 调度:${schedulerName}`);
-          session.send(`正向: ${finalPrompt}`);
-          if (options.negative !== undefined) {
-            session.send(`负向: ${finalNegativePrompt}`);
+              log.debug('负向提示词翻译为:', tempNegativePrompt);
+            }
+            log.debug('所有翻译任务完成');
           }
-        } else if (config.outputMethod === '详细信息') {
-          session.send(JSON.stringify(request, null, 4))
+
+          let finalPrompt = promptPrepend ? prompt : '';
+          finalPrompt += tempPrompt;
+          finalPrompt += promptPrepend ? '' : prompt;
+
+          let finalNegativePrompt = negativePromptPrepend ? negativePrompt : '';
+          finalNegativePrompt += tempNegativePrompt || '';
+          finalNegativePrompt += negativePromptPrepend ? '' : negativePrompt;
+
+          log.debug('最终提示词:', finalPrompt, '负向:', finalNegativePrompt);
+
+          // 构建API请求体
+          const request = {
+            prompt: finalPrompt,
+            negative_prompt: finalNegativePrompt,
+            steps: Math.min(steps, maxSteps),
+            cfg_scale: cfg,
+            width: size[0],
+            height: size[1],
+            seed: seed,
+            sampler_name: samplerName,
+            scheduler: schedulerName,
+            clip_skip: clipSkip,
+            enable_hr: hr,
+            save_images: save,
+            override_settings: {
+              sd_model_checkpoint: modelName,
+              ...(vaeName && { sd_vae: vaeName }),  // 只有当提供了 VAE 名称时才添加
+            },
+            override_settings_restore_afterwards: isTemporary,
+          }
+
+          log.debug('API请求体:', request);
+
+          // 随机发送一条消息
+          session.send(Random.pick([
+            '在画了在画了',
+            '你就在此地不要走动，等我给你画一幅',
+            '少女绘画中……',
+            '正在创作中，请稍等片刻',
+            '笔墨已备好，画卷即将展开'
+          ]));
+
+          // 调用API
+          const response = await ctx.http.post(`${endpoint}/sdapi/v1/txt2img`, request, {
+            headers: { 'Content-Type': 'application/json' },
+          });
+
+          // log.debug('API response data:', response);
+
+          // 发送图片缓冲区
+          const imgBuffer = Buffer.from(response.images[0], 'base64');
+
+          if (config.outputMethod === '图片和关键信息') {
+            session.send(`步数:${steps}, 引导:${cfg}, 尺寸:${size}, 采样:${samplerName}, 调度:${schedulerName}`);
+            session.send(`正向: ${finalPrompt}`);
+            if (options.negative !== undefined) {
+              session.send(`负向: ${finalNegativePrompt}`);
+            }
+          } else if (config.outputMethod === '详细信息') {
+            session.send(JSON.stringify(request, null, 4))
+          }
+
+          let end = performance.now();
+          log.debug(`总耗时: ${end - start} ms`);
+
+          return h.img(imgBuffer, 'image/png');
+
+        } catch (error) {
+          log.error('错误:', error);
+
+          let end = performance.now();
+          log.debug(`总耗时: ${end - start} ms`);
+
+          return `错误: ${error.message}`;
         }
-
-        let end = performance.now();
-        log.debug(`总耗时: ${end - start} ms`);
-
-        return h.img(imgBuffer, 'image/png');
-
-      } catch (error) {
-        log.error('错误:', error);
-
-        let end = performance.now();
-        log.debug(`总耗时: ${end - start} ms`);
-
-        return `错误: ${error.message}`;
-      }
+      }, session);
     });
 }
