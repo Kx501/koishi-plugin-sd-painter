@@ -54,7 +54,10 @@ export async function apply(ctx: Context, config: Config) {
         const hr = options.hiresFix || hiresFix;
         const modelVae = options.modelVae || '';
         const img2Img = options.img2img;
-        const initImages = session.quote.content;
+        let initImages: string;
+        if (options.img2img) {
+          initImages = session.quote.content;
+        }
 
         // 解析 modelVae 参数
         let [modelName, vaeName, temp] = modelVae.split(' ');
