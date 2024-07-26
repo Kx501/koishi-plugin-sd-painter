@@ -1,38 +1,40 @@
-import { Context, h, Logger, Random, Schema, Session} from 'koishi';
-import { Config } from './config';
+import { Context, h, Random, Session } from 'koishi';
+import { translateZH } from './utils'
+import { Config, log } from './config';
 
 export const name = 'sd-webui-api';
 export const inject = {
   required: ['http'],
   optional: ['puppeteer', 'translator']
 }
-const log = new Logger('sd-webui-api');
 
 export * from './config'
 
 // 插件主函数
 export async function apply(ctx: Context, config: Config) {
   // 注册指令
-  ctx.command('sd <prompt>', '根据文本生成图像')
-    .option('steps', '-t <number> 设置采样步骤数')
-    .option('cfg', '-c <number> 设置CFG Scale')
-    .option('size', '-si <width>x<height> 设置输出图像尺寸')
-    .option('seed', '--se <number> 设置随机种子')
-    .option('negative', '--n <tags> 设置负向标签')
-    .option('noPositiveTags', '-P 禁用默认正向标签')
-    .option('noNegativeTags', '-N 禁用默认负向标签')
-    .option('sampler', '-sa <name> 选择采样器')
-    .option('scheduler', '-sc <name> 选择调度器')
-    .option('modelVae', '-mv <name> [vae_name] [temp] 切换模型 [vae] [临时? Y]')
+  ctx.command('sd <prompt:text>', '提示词，首尾用引号括起来或放在参数最后')
+    .option('negative', '-n <tags:text> 负向提示词，首尾用引号括起来或放在参数最后')
+    .option('steps', '-t <number> 采样步数')
+    .option('cfg', '-c <number> 控制图像与提示词相似程度')
+    .option('size', '-si <宽x高:string> 图像尺寸')
+    .option('seed', '-se <number> 随机种子')
+    .option('noPositiveTags', '-P 禁用默认正向提示词')
+    .option('noNegativeTags', '-N 禁用默认负向提示词')
+    .option('sampler', '-sa <name> 采样器')
+    .option('scheduler', '-sc <name> 调度器')
+    .option('modelVae', '-mv <model_name> [vae_name] [temp] 切换模型、[vae], [临时切换? :Y]')
     .option('hiresFix', '-H 启用高分辨率修复')
     .option('noTranslate', '-T 禁止使用翻译服务')
-    .action(async ({ args, options, session }) => {
+    .action(async ({ options, session }, pPrompt) => {
+      // 计算耗时
+      let start = performance.now();
       try {
-        log.debug('Starting command action with args:', args);
-        log.debug('Options received:', options);
+        log.debug('传入提示词:', pPrompt);
+        log.debug('调用子指令:', options);
 
         // 直接从config对象中读取配置
-        const { endpoint, imageSize, sampler, scheduler, clipSkip, cfgScale, txt2imgSteps, maxSteps, positivePrompt, negativePrompt, positivePromptPrepend, negativePromptPrepend, hiresFix, useTranslation } = config;
+        const { endpoint, imageSize, sampler, scheduler, clipSkip, cfgScale, txt2imgSteps, maxSteps, prompt, negativePrompt, promptPrepend, negativePromptPrepend, hiresFix, save, useTranslation } = config;
 
         // 用户选项覆盖默认配置
         const steps = options.steps || txt2imgSteps;
@@ -53,18 +55,35 @@ export async function apply(ctx: Context, config: Config) {
           isTemporary = true;
         }
 
-        log.debug('Final parameters:', { steps, cfg, size, samplerName, schedulerName, modelVae });
+        log.debug('最终参数:', { steps, cfg, size, samplerName, schedulerName, modelVae });
+
+        let tempPrompt = pPrompt,
+          tempNegativePrompt = options.negative;
 
         // 构建最终的prompt和negativePrompt
-        let finalPrompt = positivePromptPrepend ? positivePrompt : '';
-        finalPrompt += args;
-        finalPrompt += positivePromptPrepend ? '' : positivePrompt;
+        if (config.useTranslation && !options.noTranslate && ctx.translator) {
+          // 翻译
+          tempPrompt = await translateZH(ctx, tempPrompt);
+
+          log.debug('提示词翻译为:', tempPrompt);
+
+          if (options.negative !== undefined) {
+            tempNegativePrompt = await translateZH(ctx, tempNegativePrompt);
+
+            log.debug('负向提示词翻译为:', tempNegativePrompt);
+          }
+          log.debug('所有翻译任务完成');
+        }
+
+        let finalPrompt = promptPrepend ? prompt : '';
+        finalPrompt += tempPrompt;
+        finalPrompt += promptPrepend ? '' : prompt;
 
         let finalNegativePrompt = negativePromptPrepend ? negativePrompt : '';
-        finalNegativePrompt += options.negative || '';
+        finalNegativePrompt += tempNegativePrompt || '';
         finalNegativePrompt += negativePromptPrepend ? '' : negativePrompt;
 
-        log.debug('Final prompts:', { finalPrompt, finalNegativePrompt });
+        log.debug('最终提示词:', finalPrompt, '负向:', finalNegativePrompt);
 
         // 构建API请求体
         const request = {
@@ -79,6 +98,7 @@ export async function apply(ctx: Context, config: Config) {
           scheduler: schedulerName,
           clip_skip: clipSkip,
           enable_hr: hr,
+          save_images: save,
           override_settings: {
             sd_model_checkpoint: modelName,
             ...(vaeName && { sd_vae: vaeName }),  // 只有当提供了 VAE 名称时才添加
@@ -86,7 +106,7 @@ export async function apply(ctx: Context, config: Config) {
           override_settings_restore_afterwards: isTemporary,
         };
 
-        log.debug('API request body:', request);
+        log.debug('API请求体:', request);
 
         // 随机发送一条消息
         session.send(Random.pick([
@@ -107,10 +127,28 @@ export async function apply(ctx: Context, config: Config) {
         // 发送图片缓冲区
         const imgBuffer = Buffer.from(response.images[0], 'base64');
 
+        if (config.outputMethod === '图片和关键信息') {
+          session.send(`步数:${steps}, 引导:${cfg}, 尺寸:${size}, 采样:${samplerName}, 调度:${schedulerName}`);
+          session.send(`正向: ${finalPrompt}`);
+          if (options.negative !== undefined) {
+            session.send(`负向: ${finalNegativePrompt}`);
+          }
+        } else if (config.outputMethod === '详细信息') {
+          session.send(JSON.stringify(request, null, 4))
+        }
+
+        let end = performance.now();
+        log.debug(`总耗时: ${end - start} ms`);
+
         return h.img(imgBuffer, 'image/png');
+
       } catch (error) {
-        log.error('Error in command action:', error);
-        return `Error generating image: ${error.message}`;
+        log.error('错误:', error);
+
+        let end = performance.now();
+        log.debug(`总耗时: ${end - start} ms`);
+
+        return `错误: ${error.message}`;
       }
     });
 }
