@@ -17,7 +17,16 @@ export async function apply(ctx: Context, config: Config) {
   let activeCount = 0;
 
   async function runWithConcurrencyLimit(fn: () => Promise<any>, session: Session): Promise<any> {
-    if (activeCount < config.maxConcurrency) {
+    if (queue.length >= config.maxConcurrency) {
+      session.send(Random.pick([
+        '等会再约稿吧，我已经忙不过来了……',
+        '是数位板没电了，才…才不是我不想画呢！',
+        '那你得先教我画画（理直气壮',
+      ]));
+      return;
+    }
+
+    if (activeCount === 0 && queue.length === 0) {
       activeCount++;
       const result = await fn();
       activeCount--;
@@ -27,11 +36,16 @@ export async function apply(ctx: Context, config: Config) {
       }
       return result;
     } else {
-      // 提示用户当前正在排队
-      session.send('当前请求已达到最大并发限制，您的请求已加入队列，请稍候...');
+      session.send(`在画了在画了，不过前面还有 ${queue.length} 个稿……`);
       return new Promise((resolve) => {
         queue.push(async () => {
+          activeCount++;
           const result = await fn();
+          activeCount--;
+          if (queue.length > 0) {
+            const nextFn = queue.shift();
+            if (nextFn) nextFn();
+          }
           resolve(result);
         });
       });
@@ -136,13 +150,15 @@ export async function apply(ctx: Context, config: Config) {
           log.debug('API请求体:', request);
 
           // 随机发送一条消息
-          session.send(Random.pick([
-            '在画了在画了',
-            '你就在此地不要走动，等我给你画一幅',
-            '少女绘画中……',
-            '正在创作中，请稍等片刻',
-            '笔墨已备好，画卷即将展开'
-          ]));
+          if (queue.length === 0 && activeCount === 0) {
+            session.send(Random.pick([
+              '在画了在画了',
+              '你就在此地不要走动，等我给你画一幅',
+              '少女绘画中……',
+              '正在创作中，请稍等片刻',
+              '笔墨已备好，画卷即将展开'
+            ]));
+          }
 
           // 调用API
           const response = await ctx.http.post(`${endpoint}/sdapi/v1/txt2img`, request, {
