@@ -19,7 +19,6 @@ export interface Config {
   save: boolean; // 是否保存到本地
   useTranslation: boolean; // 是否使用翻译服务
   endpoint: string; // API端点
-  maxConcurrency?: number; // 最大并发数
 }
 
 // 配置约束
@@ -103,7 +102,5 @@ export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
     endpoint: Schema.string()
       .default('http://127.0.0.1:7860').description('SD-WebUI API的网络地址'),
-    maxConcurrency: Schema.number()
-      .min(0).default(3).description('同时处理的最大请求数量'),
   }).description('网络配置'),
 ]);
