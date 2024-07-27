@@ -2,6 +2,7 @@ import { Schema, Logger } from 'koishi';
 export const log = new Logger('sd-webui-api');
 
 export interface Config {
+  endpoint: string; // API端点
   sampler: any; // 采样器选项
   scheduler: any; // 调度器选项
   clipSkip: number; // CLIP模型skip层数
@@ -18,12 +19,14 @@ export interface Config {
   hiresFix: boolean; // 是否使用高分辨率修复
   save: boolean; // 是否保存到本地
   useTranslation: boolean; // 是否使用翻译服务
-  endpoint: string; // API端点
+  maxTasks: number;
 }
 
 // 配置约束
 export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
+    endpoint: Schema.string()
+      .default('http://127.0.0.1:7860').description('SD-WebUI API的网络地址'),
     sampler: Schema.union([
       'DPM++ 2M',
       'DPM++ SDE',
@@ -70,17 +73,17 @@ export const Config: Schema<Config> = Schema.intersect([
   - 1920x1080
   `),
     cfgScale: Schema.number()
-      .default(7).description('提示词引导系数，用于控制图像与提示词相似程度'),
+      .default(7).description('提示词引导系数，用于控制图像服从提示词程度'),
     txt2imgSteps: Schema.number()
-      .default(20).description('文生图的采样步数'),
+      .default(20).description('文生图默认采样步数'),
     img2imgSteps: Schema.number()
-      .default(40).description('图生图的采样步数'),
+      .default(40).description('图生图默认采样步数'),
     maxSteps: Schema.number()
-      .default(60).description('最大允许的采样步数'),
+      .default(60).description('最大允许采样步数'),
     prompt: Schema.string()
-      .default('').description('默认的正向提示词'),
+      .default('').description('默认正向提示词'),
     negativePrompt: Schema.string()
-      .default('').description('默认的负向提示词'),
+      .default('').description('默认负向提示词'),
     promptPrepend: Schema.boolean()
       .default(true).description('正向提示词是否添加在指令提示词之前'),
     negativePromptPrepend: Schema.boolean()
@@ -95,12 +98,12 @@ export const Config: Schema<Config> = Schema.intersect([
     hiresFix: Schema.boolean()
       .default(false).description('是否启用高分辨率修复'),
     save: Schema.boolean()
-      .default(false).description('是否保存到本地'),
+      .default(false).description('是否保存图片到本地'),
+  }).description('其他设置'),
+  Schema.object({
     useTranslation: Schema.boolean()
       .default(false).description('是否启用翻译服务以处理非英文提示词'),
+    maxTasks:Schema.number()
+    .default(3).description('最大任务数'),
   }).description('拓展功能'),
-  Schema.object({
-    endpoint: Schema.string()
-      .default('http://127.0.0.1:7860').description('SD-WebUI API的网络地址'),
-  }).description('网络配置'),
 ]);
