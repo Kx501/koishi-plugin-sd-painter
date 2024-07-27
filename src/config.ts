@@ -23,7 +23,7 @@ export interface Config {
 }
 
 // 配置约束
-export const Config: Schema<Config> = Schema.intersect([
+export const Config = Schema.intersect([
   Schema.object({
     endpoint: Schema.string()
       .default('http://127.0.0.1:7860').description('SD-WebUI API的网络地址'),
@@ -103,7 +103,7 @@ export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
     useTranslation: Schema.boolean()
       .default(false).description('是否启用翻译服务以处理非英文提示词'),
-    maxTasks:Schema.number()
-    .default(3).description('最大任务数'),
+    maxTasks: Schema.number()
+      .default(3).description('最大任务数'),
   }).description('拓展功能'),
 ]);

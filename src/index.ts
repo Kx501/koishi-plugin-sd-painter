@@ -18,6 +18,11 @@ export async function apply(ctx: Context, config: Config) {
   const { endpoint, useTranslation, maxTasks } = config;
   let numberOfTasks = 0;
 
+  // 添加任务
+  const addTask = () => numberOfTasks++;
+  // 移除任务
+  const removeTask = () => numberOfTasks--;
+
   // 注册 text2img/img2img 指令
   ctx.command('sd [prompt]', '提示词，有空格首位用引号括起来')
     .option('negative', '-n <tags> 负向提示词，有空格首位用引号括起来')
@@ -35,7 +40,7 @@ export async function apply(ctx: Context, config: Config) {
     .option('noTranslate', '-T 禁止使用翻译服务')
     .action(async ({ options, session }, pPrompt) => {
       if (!maxTasks || numberOfTasks < maxTasks) {
-        numberOfTasks++;
+        addTask();
         // 计算耗时
         let start = performance.now();
         try {
@@ -170,7 +175,7 @@ export async function apply(ctx: Context, config: Config) {
           let end = performance.now();
           log.debug(`总耗时: ${end - start} ms`);
 
-          numberOfTasks--;
+          removeTask();
           return h.img(imgBuffer, 'image/png');
 
         } catch (error) {
@@ -179,10 +184,11 @@ export async function apply(ctx: Context, config: Config) {
           let end = performance.now();
           log.debug(`总耗时: ${end - start} ms`);
 
-          numberOfTasks--;
+          removeTask();
           return `错误: ${error.message}`;
         }
-      } else { // 超过最大任务数的处理逻辑
+      } else {
+        // 超过最大任务数的处理逻辑
         session.send(Random.pick([
           '等会再约稿吧，我已经忙不过来了……',
           '是数位板没电了，才…才不是我不想画呢！',
@@ -193,7 +199,7 @@ export async function apply(ctx: Context, config: Config) {
 
 
   // 注册 Interruptapi 指令
-  ctx.command('sdt', '中断当前操作')
+  ctx.command('sdstop', '中断当前操作')
     .action(async () => {
       try {
         log.debug('调用 Interruptapi');
@@ -205,21 +211,20 @@ export async function apply(ctx: Context, config: Config) {
 
         log.debug('API响应数据:', response);
 
-        numberOfTasks--;
+        removeTask();
         return '操作已中断';
       } catch (error) {
         log.error('错误:', error);
-
-        numberOfTasks--;
         return `错误: ${error.message}`;
       }
     });
 
 
   // 注册 Interrogateapi 指令
-  ctx.command('interrogate <image>', '图像生成提示词', { checkArgCount: true })
+  ctx.command('sdtag [image]', '图像生成提示词')
     .option('model', '-m <model:string> 使用的模型')
     .action(async ({ options, session }, image) => {
+      addTask();
       try {
         log.debug('传入图像:', image);
         log.debug('调用子指令:', options);
@@ -239,12 +244,12 @@ export async function apply(ctx: Context, config: Config) {
 
         log.debug('API响应状态:', response.statusText);
 
-        numberOfTasks--;
+        removeTask();
         return `描述结果: ${response.data.description}`;
       } catch (error) {
         log.error('错误:', error);
 
-        numberOfTasks--;
+        removeTask();
         return `错误: ${error.message}`;
       }
     });
