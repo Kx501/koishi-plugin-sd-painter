@@ -13,17 +13,16 @@ export * from './config'
 // 插件主函数
 export async function apply(ctx: Context, config: Config) {
   // 调试用
-  ctx.on('message-created', (session: Session) => { log.debug(session.event) }, true)
-
+  ctx.on('message-created', (session: Session) => { log.debug(h.select(session.elements, 'img')) }, true)
 
   const { endpoint, useTranslation } = config;
 
   // 注册 text2img/img2img 指令
-  ctx.command('sd <prompt>', '提示词，有空格首位用引号括起来', { checkArgCount: true })
+  ctx.command('sd [prompt]', '提示词，有空格首位用引号括起来')
     .option('negative', '-n <tags> 负向提示词，有空格首位用引号括起来')
-    .option('steps', '-t <number> 采样步数')
+    .option('steps', '-s <number> 采样步数')
     .option('cfg', '-c <number> 控制图像与提示词相似程度')
-    .option('size', '-si <宽x高:string> 图像尺寸')
+    .option('size', '-si <宽x高> 图像尺寸')
     .option('seed', '-se <number> 随机种子')
     .option('noPositiveTags', '-P 禁用默认正向提示词')
     .option('noNegativeTags', '-N 禁用默认负向提示词')
@@ -32,7 +31,8 @@ export async function apply(ctx: Context, config: Config) {
     .option('modelVae', '-mv <model_name> [vae_name] [temp] 切换模型、[vae], [临时切换? :Y]')
     .option('hiresFix', '-H 启用高分辨率修复')
     .option('noTranslate', '-T 禁止使用翻译服务')
-    .option('img2img', '-I 启用图生图')
+    .option('img2img', '-i 图生图@图片')
+    .option('imgURL', '-u <imgURL> 图生图输入图片链接')
     .action(async ({ options, session }, pPrompt) => {
 
       // 计算耗时
@@ -53,10 +53,20 @@ export async function apply(ctx: Context, config: Config) {
         const schedulerName = options.scheduler || scheduler;
         const hr = options.hiresFix || hiresFix;
         const modelVae = options.modelVae || '';
-        const img2Img = options.img2img;
+        const imgURL = options.imgURL;
         let initImages: string;
-        if (options.img2img) {
-          initImages = session.quote.content;
+        if (options.img2img || imgURL) {
+          if (imgURL) {
+            const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
+            if (hasProtocol(imgURL)) {
+              initImages = imgURL
+            } else {
+              return '请输入有效的图片链接'
+            }
+          } else {
+            initImages = h.select(session.elements, 'img')[0]?.attrs.src;
+            if (initImages === undefined) return '请输入图片链接或引用图片消息';
+          }
         }
 
         // 解析 modelVae 参数
@@ -116,7 +126,7 @@ export async function apply(ctx: Context, config: Config) {
             ...(vaeName && { sd_vae: vaeName }),  // 只有当提供了 VAE 名称时才添加
           },
           override_settings_restore_afterwards: isTemporary,
-          ...(initImages && { init_images: initImages }), // 只有当提供了 init_images 时才添加
+          ...(initImages && { init_images: [initImages] }), // 只有当提供了 init_images 时才添加
         }
 
         log.debug('API请求体:', request);
@@ -130,7 +140,7 @@ export async function apply(ctx: Context, config: Config) {
         ]));
 
         let response: HTTP.Response<any>;
-        if (img2Img) {
+        if (options.img2img) {
           // 调用 img2imgAPI
           response = await ctx.http('post', `${endpoint}/sdapi/v1/img2img`, {
             data: request,
@@ -227,5 +237,4 @@ export async function apply(ctx: Context, config: Config) {
         return `错误: ${error.message}`;
       }
     });
-
 }
