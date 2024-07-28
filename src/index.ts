@@ -51,7 +51,7 @@ export async function apply(ctx: Context, config: Config) {
           log.debug('调用子指令:', options);
 
           // 直接从config对象中读取配置
-          const { imageSize, sampler, scheduler, clipSkip, cfgScale, txt2imgSteps, img2imgSteps, maxSteps, prompt, negativePrompt, promptPrepend, negativePromptPrepend, hiresFix, restoreFaces, useTranslation, save } = config;
+          const { imageSize, sampler, scheduler, cfgScale, txt2imgSteps, img2imgSteps, maxSteps, prompt, negativePrompt, promptPrepend, negativePromptPrepend, hiresFix, restoreFaces, useTranslation, save } = config;
 
           // 用户选项覆盖默认配置
           let initImages = options.img2img;
@@ -381,6 +381,33 @@ export async function apply(ctx: Context, config: Config) {
           '你怎么这么多事，（恼',
           '要被玩坏啦！'
         ]));
+      }
+    });
+
+
+  // 注册 Set Config 指令
+  ctx.command('setconfig <configData>', '修改SD全局设置', {
+    checkUnknown: true,
+    checkArgCount: true
+  })
+    .action(async ({ session }, configData) => {
+      if (config.setConfig) {
+        try {
+          const response = await ctx.http('post', `${endpoint}/sdapi/v1/options`, {
+            data: JSON.parse(configData),
+            headers: { 'Content-Type': 'application/json' },
+          });
+          log.debug('设置全局配置成功:', response);
+          return '配置已成功设置。';
+        } catch (error) {
+          log.error('设置全局配置时出错:', error);
+          if (error.response?.status === 422) {
+            return '配置数据验证错误，请检查提供的数据格式。';
+          }
+          return `设置配置时出错: ${error.message}`;
+        }
+      } else {
+        session.send('管理员未启用该设置')
       }
     });
 

@@ -18,7 +18,7 @@ export interface Config {
   restoreFaces: boolean; // 是否使用人脸修复
   hiresFix: boolean; // 是否使用高分辨率修复
   outputMethod: any;  // 输出方式
-  clipSkip: number; // CLIP模型skip层数
+  setConfig: boolean; // 指令修改SD全局设置
   useTranslation: boolean; // 是否使用翻译服务
   maxTasks: number; // 最大任务数
 }
@@ -99,9 +99,8 @@ export const Config = Schema.intersect([
       '关键信息',
       '详细信息'
     ]).default('仅图片').description('输出方式'),
-    clipSkip: Schema.number()
-      .default(2)
-      .description('跳过CLIP模型的前几层，以减少计算成本'),
+    setConfig: Schema.boolean()
+      .default(false).description('是否启用指令修改SD全局设置'),
   }).description('其他设置'),
   Schema.object({
     useTranslation: Schema.boolean()
