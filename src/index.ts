@@ -48,7 +48,7 @@ export async function apply(ctx: Context, config: Config) {
           let start = performance.now();
 
           log.debug('传入提示词:', _);
-          log.debug('调用子指令:', options);
+          log.debug('选择子选项:', options);
 
           // 直接从config对象中读取配置
           const { imageSize, sampler, scheduler, cfgScale, txt2imgSteps, img2imgSteps, maxSteps, prompt, negativePrompt, promptPrepend, negativePromptPrepend, hiresFix, restoreFaces, useTranslation, save } = config;
@@ -213,29 +213,35 @@ export async function apply(ctx: Context, config: Config) {
 
 
   // 注册 Interrogateapi 指令
-  ctx.command('sdtag [image]', '图片生成提示词')
+  ctx.command('sdtag [imgURL]', '图片生成提示词')
     .option('model', '-m <model:string> 使用的模型')
-    .action(async ({ options, session }, image) => {
+    .action(async ({ options, session }, _) => {
       if (!maxTasks || numberOfTasks < maxTasks) {
         try {
           addTask();
-          log.debug('传入图像:', image);
-          log.debug('调用子指令:', options);
+
+          // 获取图片
+          const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
+          if (!hasProtocol(_)) {
+            _ = h.select(session.elements, 'img')[0]?.attrs.src;
+            if (_ === undefined) return '请引用图片消息或检查图片链接';
+          }
+
+          log.debug('传入图像:', _);
+          log.debug('选择子选项:', options);
 
           const request = {
-            image: image || '',
-            model: options.model || ''
+            image: _,
+            model: options.model || config.wd14tagger
           };
 
           log.debug('API请求体:', request);
 
           if (numberOfTasks === 1) {
             session.send(Random.pick([
-              '开始反推提示词',
-              '',
-              '少女绘画中……',
-              '正在创作中，请稍等片刻',
-              '笔墨已备好，画卷即将展开'
+              '开始反推提示词...',
+              '在推了在推了...让我仔细想想...',
+              '我在想想想了...',
             ]))
           } else {
             session.send(`在推了在推了，不过前面还有 ${numberOfTasks} 个任务……`)
@@ -258,9 +264,9 @@ export async function apply(ctx: Context, config: Config) {
         }
       } else {
         session.send(Random.pick([
-          '任务数上限了，等会儿再来吧...',
+          '这个任务有点难，我不想做>_<',
           '脑子转不过来了，啊吧啊吧--',
-          '推不动了，你来算吧！'
+          '推导不出来，你来推吧！'
         ]));
       }
     });
@@ -269,7 +275,7 @@ export async function apply(ctx: Context, config: Config) {
   // 提取路径最后一段
   const extractFileName = (path: string) => path.split('\\').pop();
 
-  // 注册 GetSdModels 指令
+  // 注册 GetModels 指令
   ctx.command('sdmodel [sd_name] [vae_name]', '查询和切换模型')
     .usage('输入<model_name>为切换模型，缺失时查询模型')
     .option('sd', '-s 查询/切换SD模型')
@@ -279,6 +285,7 @@ export async function apply(ctx: Context, config: Config) {
     .option('lora', '-l 查询可用的loras模型')
     .action(async ({ session, options }, _1, _2) => {
       if (!maxTasks || numberOfTasks < maxTasks) {
+        if (!options) return '请选择指令选项！';
         const sd = options.sd;
         const vae = options.vae;
         const embeddeding = options.embeddeding;
@@ -386,7 +393,7 @@ export async function apply(ctx: Context, config: Config) {
 
 
   // 注册 Set Config 指令
-  ctx.command('setconfig <configData>', '修改SD全局设置', {
+  ctx.command('sdset <configData>', '修改SD全局设置', {
     checkUnknown: true,
     checkArgCount: true
   })

@@ -4,9 +4,9 @@ export const log = new Logger('sd-webui-api');
 export interface Config {
   endpoint: string; // API端点
   save: boolean; // 是否保存到本地
-  sampler: any; // 采样器选项
-  scheduler: any; // 调度器选项
-  imageSize: any; // 图片尺寸
+  sampler: string; // 采样器选项
+  scheduler: string; // 调度器选项
+  imageSize: number[]; // 图片尺寸
   cfgScale: number; // CFG Scale
   txt2imgSteps: number; // 文生图步骤数
   img2imgSteps: number; // 图生图步骤数
@@ -17,14 +17,15 @@ export interface Config {
   negativePromptPrepend: boolean; // 负向提示词是否前置
   restoreFaces: boolean; // 是否使用人脸修复
   hiresFix: boolean; // 是否使用高分辨率修复
-  outputMethod: any;  // 输出方式
+  wd14tagger: string; // 图像反推模型
+  outputMethod: string;  // 输出方式
   setConfig: boolean; // 指令修改SD全局设置
   useTranslation: boolean; // 是否使用翻译服务
   maxTasks: number; // 最大任务数
 }
 
 // 配置约束
-export const Config = Schema.intersect([
+export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
     endpoint: Schema.string()
       .default('http://127.0.0.1:7860').description('SD-WebUI API的网络地址'),
@@ -51,7 +52,7 @@ export const Config = Schema.intersect([
       'UniPC',
       'LCM'
     ])
-      .default('DPM++ SDE').description('采样器选项'),
+      .default('DPM++ SDE').description('采样器选择'),
     scheduler: Schema.union([
       'Automatic',
       'Uniform',
@@ -60,9 +61,9 @@ export const Config = Schema.intersect([
       'Polyexponential',
       'SGM Uniform'
     ])
-      .default('Automatic').description('调度器选项'),
+      .default('Automatic').description('调度器选择'),
     imageSize: Schema.tuple([Schema.number(), Schema.number()])
-      .default([512, 512]).description(`生成图像的宽度和高度(16的倍数)
+      .default([512, 512]).description(`默认宽度和高度(16的倍数)
   - 模板：
   - 256x256
   - 512x512
@@ -92,7 +93,26 @@ export const Config = Schema.intersect([
       .default(false).description('是否启用人脸修复').disabled(),
     hiresFix: Schema.boolean()
       .default(false).description('是否启用高分辨率修复').disabled(),
-  }).description('基础设置'),
+  }).description('绘画设置'),
+  Schema.object({
+    wd14tagger: Schema.union([
+      'wd-convnext-v3',
+      'wd-swinv2-v3',
+      'wd-vit-v3',
+      'wd14-convnext',
+      'wd14-convnext-v2',
+      'wd14-convnext-v2-git',
+      'wd14-convnextv2-v2',
+      'wd14-convnextv2-v2-git',
+      'wd14-moat-v2',
+      'wd14-swinv2-v2',
+      'wd14-swinv2-v2-git',
+      'wd14-vit',
+      'wd14-vit-v2',
+      'wd14-vit-v2-git',
+    ])
+      .default('wd14-vit-v2-git').description('反推模型选择'),
+  }).description('扩展设置'),
   Schema.object({
     outputMethod: Schema.union([
       '仅图片',
