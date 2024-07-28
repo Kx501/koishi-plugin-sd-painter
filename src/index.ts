@@ -40,13 +40,14 @@ export async function apply(ctx: Context, config: Config) {
     .option('noTranslate', '-T 禁止使用翻译服务')
     .option('model', '-m <model_name> 单次切换SD模型')
     .option('vae', '-v <vae_name> 单次切换Vae模型')
-    .action(async ({ options, session }, pPrompt) => {
+    .action(async ({ options, session }, _) => {
       if (!maxTasks || numberOfTasks < maxTasks) {
         addTask();
         // 计算耗时
         let start = performance.now();
+
         try {
-          log.debug('传入提示词:', pPrompt);
+          log.debug('传入提示词:', _);
           log.debug('调用子指令:', options);
 
           // 直接从config对象中读取配置
@@ -65,7 +66,7 @@ export async function apply(ctx: Context, config: Config) {
 
           log.debug('最终参数:', { steps, cfg, size, samplerName, schedulerName, modelName, vaeName });
 
-          let tempPrompt = pPrompt,
+          let tempPrompt = _,
             tempNegativePrompt = options.negative;
 
           // 构建最终的 prompt 和 negativePrompt
@@ -106,17 +107,8 @@ export async function apply(ctx: Context, config: Config) {
           // if (restoreFaces && !options.restoreFaces) { }
 
 
-          // // 切换模型
-          // let isTemporary = temp === 'Y'; // 默认为 true，只有当 temp 为 'Y' 时才为 true
-
-          // // 如果 temp 未提供，则 isTemporary 保持默认值 true
-          // if (temp === undefined) {
-          //   isTemporary = true;
-          // }
-
-
           // 构建API请求体
-          let request = {
+          const request = {
             prompt: finalPrompt,
             negative_prompt: finalNegativePrompt,
             steps: Math.min(steps, maxSteps),
@@ -272,8 +264,8 @@ export async function apply(ctx: Context, config: Config) {
       } else {
         session.send(Random.pick([
           '任务数上限了，等会儿再来吧...',
-          '脑子转不过来啦，啊吧啊吧~',
-          '要被玩坏啦！'
+          '脑子转不过来了，啊吧啊吧--',
+          '推不动了，你来算吧！'
         ]));
       }
     });
@@ -282,118 +274,107 @@ export async function apply(ctx: Context, config: Config) {
   // 提取路径最后一段
   const extractFileName = (path: string) => path.split('\\').pop();
 
-
-
   // 注册 GetSdModels 指令
-  ctx.command('sdmodel [model_name]', '查询和切换模型')
+  ctx.command('sdmodel [sd_name] [vae_name]', '查询和切换模型')
     .usage('输入<model_name>为切换模型，缺失时查询模型')
     .option('sd', '-s 查询/切换SD模型')
     .option('vae', '-v 查询/切换Vae模型')
-    .option('embedded', '-e 查询/切换Embeddeding模型')
-    .option('hybridnetwork', '-h 查询')
-    .action(async ({ session }) => {
-      try {
-        const response = await ctx.http('get', `${config.endpoint}/sdapi/v1/sd-models`);
-        const models = response.data;
-        log.debug('获取SD模型:', models);
+    .option('embeddeding', '-e 查询可用的嵌入模型')
+    .option('hybridnetwork', '-h 查询可用的超网络模型')
+    .option('lora', '-l 查询可用的loras模型')
+    .action(async ({ session, options }, _1, _2) => {
+      if (!maxTasks || numberOfTasks < maxTasks) {
+        const sd = options.sd;
+        const vae = options.vae;
+        const embeddeding = options.embeddeding;
+        const hybridnetwork = options.hybridnetwork;
+        const lora = options.lora;
+        const sdName = _1;
+        const vaeName = _2;
 
-        const result = models.map((model: { filename: string; model_name: string; }) => {
-          const fileName = extractFileName(model.filename);
-          return `模型名称: ${model.model_name}\n文件名: ${fileName}`;
-        }).join('\n\n');
+        try {
+          // 查询
+          if ((sd || vae) && !(_1 || _2)) {
+            const path = sd ? 'sd-models' : 'sd-vae';
+            const response = await ctx.http('get', `${endpoint}/sdapi/v1/${path}`);
+            const models = response.data;
+            log.debug(`获取${sd ? 'SD' : 'SD VAE'}模型:`, models);
 
-        return result || '未找到可用的SD模型。';
-      } catch (error) {
-        log.error('获取SD模型时出错:', error);
-        return `获取SD模型时出错: ${error.message}`;
-      }
-    });
+            const result = models.map((model: { filename: string; model_name: string; }) => {
+              const fileName = extractFileName(model.filename);
+              return `模型名称: ${model.model_name}\n文件名: ${fileName}`;
+            }).join('\n\n');
 
+            return result || `未找到可用的${sd ? 'SD' : 'SD VAE'}模型。`;
+          }
+          // 切换
+          else if ((_1 || _2) && (sd || vae)) {
+            const request = {
+              override_settings: {
+                ...(sdName && { sd_model_checkpoint: _1 }), // 只有当提供了模型名称时才添加
+                ...(vaeName && { sd_vae: _2 }),  // 只有当提供了 VAE 名称时才添加
+              },
+              override_settings_restore_afterwards: false,
+            }
 
-  // 注册 GetSdVaes 指令
-  ctx.command('sd.vaes', '获取可用的SD VAE模型')
-    .action(async ({ session }) => {
-      try {
-        const response = await ctx.http('get', `${endpoint}/sdapi/v1/sd-vae`);
-        const vaes = response.data;
-        log.debug('获取SD VAE模型:', vaes);
+            const response = await ctx.http('post', `${endpoint}/sdapi/v1/img2img`, {
+              data: request,
+            });
 
-        const result = vaes.map((vae: { filename: string; model_name: string; }) => {
-          const fileName = extractFileName(vae.filename);
-          return `模型名称: ${vae.model_name}\n文件名: ${fileName}`;
-        }).join('\n\n');
+          }
 
-        return result || '未找到可用的SD VAE模型。';
-      } catch (error) {
-        log.error('获取SD VAE模型时出错:', error);
-        return `获取SD VAE模型时出错: ${error.message}`;
-      }
-    });
+          if (embeddeding) {
+            const response = await ctx.http('get', `${endpoint}/sdapi/v1/embeddings`);
+            const embeddings = response.data;
+            log.debug('获取嵌入模型:', embeddings);
 
+            const loadedEmbeddings = Object.keys(embeddings.loaded).map(key => `可加载的嵌入: ${key}`).join('\n');
+            const skippedEmbeddings = Object.keys(embeddings.skipped).map(key => `不兼容的嵌入: ${key}`).join('\n');
 
-  // 注册 GetEmbeddings 指令
-  ctx.command('sd.embeddings', '获取当前SD模型可加载和不兼容的嵌入模型')
-    .action(async ({ session }) => {
-      try {
-        const response = await ctx.http('get', `${endpoint}/sdapi/v1/embeddings`);
-        const embeddings = response.data;
-        log.debug('获取嵌入模型:', embeddings);
+            const result = `${loadedEmbeddings}\n\n${skippedEmbeddings}`;
 
-        const loadedEmbeddings = Object.keys(embeddings.loaded).map(key => `可加载的嵌入: ${key}`).join('\n');
-        const skippedEmbeddings = Object.keys(embeddings.skipped).map(key => `不兼容的嵌入: ${key}`).join('\n');
+            return result || '未找到嵌入模型信息。';
+          }
 
-        const result = `${loadedEmbeddings}\n\n${skippedEmbeddings}`;
+          if (hybridnetwork) {
+            const response = await ctx.http('get', `${endpoint}/sdapi/v1/hypernetworks`, {
+            });
+            const hypernetworks = response.data;
+            log.debug('获取Hypernetworks模型',);
 
-        return result || '未找到嵌入模型信息。';
-      } catch (error) {
-        log.error('获取嵌入模型时出错:', error);
-        return `获取嵌入模型时出错: ${error.message}`;
-      }
-    });
+            const result = hypernetworks.map((hn: { filename: string; model_name: string }) => {
+              const filename = extractFileName(hn.filename);
+              return `模型名称: ${hn.model_name}\n文件名: ${filename}`;
+            }).join('\n\n');
 
+            return result || '未找到超网络模型信息。';
+          }
 
-  // 注册 GetHypernetworks 指令
-  ctx.command('sd.hypernetworks', '获取超网络模型信息')
-    .action(async ({ session }) => {
-      try {
-        // 调用 GetHypernetworks API
-        const response = await ctx.http('get', `${endpoint}/sdapi/v1/hypernetworks`, {
-        });
-        const hypernetworks = response.data;
-        log.debug('获取Hypernetworks模型',);
+          if (lora) {
+            const response = await ctx.http('get', `${endpoint}/sdapi/v1/loras`);
+            const loras = response.data;
+            log.debug('获取Loras:', loras);
 
-        const result = hypernetworks.map((hn: { filename: string; model_name: string }) => {
-          const filename = extractFileName(hn.filename);
-          return `模型名称: ${hn.model_name}\n文件名: ${filename}`;
-        }).join('\n\n');
+            const result = loras.map((lora: { filename: string; model_name: string; }) => {
+              const fileName = extractFileName(lora.filename);
+              return `名称: ${lora.model_name}\n文件名: ${fileName}`;
+            }).join('\n\n');
 
-        return result || '未找到超网络模型信息。';
-      } catch (error) {
-        log.error('获取超网络模型信息时出错:', error);
+            return result || '未找到Loras信息。';
+          }
 
-        removeTask();
-        return `获取超网络模型信息时出错: ${error.message}`;
-      }
-    });
-
-
-  // 注册 GetLoras 指令
-  ctx.command('sd.loras', '获取当前模型加载的Loras模型')
-    .action(async ({ session }) => {
-      try {
-        const response = await ctx.http('get', `${endpoint}/sdapi/v1/loras`);
-        const loras = response.data;
-        log.debug('获取Loras:', loras);
-
-        const result = loras.map((lora: { filename: string; model_name: string; }) => {
-          const fileName = extractFileName(lora.filename);
-          return `名称: ${lora.model_name}\n文件名: ${fileName}`;
-        }).join('\n\n');
-
-        return result || '未找到Loras信息。';
-      } catch (error) {
-        log.error('获取Loras模型时出错:', error);
-        return `获取Loras模型时出错: ${error.message}`;
+        } catch (error) {
+          if (embeddeding || hybridnetwork || lora || sd || vae && !_1 && !_2) {
+            log.error('查询模型时出错:', error);
+            return `查询模型时出错: ${error.message}`;
+          }
+        }
+      } else {
+        session.send(Random.pick([
+          '忙不过来了，走开走开！',
+          '你怎么那么多事，（恼',
+          '要被玩坏啦！'
+        ]));
       }
     });
 
