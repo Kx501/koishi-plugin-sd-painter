@@ -19,6 +19,8 @@ export interface Config {
   hiresFix: boolean; // 是否使用高分辨率修复
   wd14tagger: string; // 图像反推模型
   outputMethod: string;  // 输出方式
+  maxPrompt: number;  //最大提示词数
+  excessProcessing: string;  //提示词超限处理方式
   setConfig: boolean; // 指令修改SD全局设置
   useTranslation: boolean; // 是否使用翻译服务
   maxTasks: number; // 最大任务数
