@@ -60,28 +60,13 @@ export async function apply(ctx: Context, config: Config) {
           const schedulerName = options.scheduler || scheduler;
           const hr = options.hiresFix || hiresFix;
           const modelVae = options.modelVae || '';
-          if (initImages) {
-            const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
-            if (!hasProtocol(initImages)) {
-              initImages = h.select(session.elements, 'img')[0]?.attrs.src;
-              if (initImages === undefined) return '请引用图片消息或检查图片链接';
-            }
-          }
-
-          // 解析 modelVae 参数
-          let [modelName, vaeName, temp] = modelVae.split(' ');
-          let isTemporary = temp === 'Y'; // 默认为 true，只有当 temp 为 'Y' 时才为 true
-          // 如果 temp 未提供，则 isTemporary 保持默认值 true
-          if (temp === undefined) {
-            isTemporary = true;
-          }
 
           log.debug('最终参数:', { steps, cfg, size, samplerName, schedulerName, modelVae });
 
           let tempPrompt = pPrompt,
             tempNegativePrompt = options.negative;
 
-          // 构建最终的prompt和negativePrompt
+          // 构建最终的 prompt 和 negativePrompt
           if (useTranslation && !options.noTranslate && ctx.translator) {
             // 翻译
             tempPrompt = await translateZH(ctx, tempPrompt);
@@ -106,8 +91,27 @@ export async function apply(ctx: Context, config: Config) {
 
           log.debug('最终提示词:', finalPrompt, '负向:', finalNegativePrompt);
 
+          // 图生图
+          if (initImages) {
+            const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
+            if (!hasProtocol(initImages)) {
+              initImages = h.select(session.elements, 'img')[0]?.attrs.src;
+              if (initImages === undefined) return '请引用图片消息或检查图片链接';
+            }
+          }
+
+          // 切换模型
+          // 解析 modelVae 参数
+          let [modelName, vaeName, temp] = modelVae.split(' ');
+          let isTemporary = temp === 'Y'; // 默认为 true，只有当 temp 为 'Y' 时才为 true
+
+          // 如果 temp 未提供，则 isTemporary 保持默认值 true
+          if (temp === undefined) {
+            isTemporary = true;
+          }
+
           // 构建API请求体
-          const request = {
+          let request = {
             prompt: finalPrompt,
             negative_prompt: finalNegativePrompt,
             steps: Math.min(steps, maxSteps),
@@ -212,7 +216,7 @@ export async function apply(ctx: Context, config: Config) {
         log.debug('API响应数据:', response);
 
         removeTask();
-        return '操作已中断';
+        return '已终止一个任务';
       } catch (error) {
         log.error('错误:', error);
         return `错误: ${error.message}`;
@@ -254,6 +258,92 @@ export async function apply(ctx: Context, config: Config) {
       }
     });
 
+
+  // 提取路径最后一段
+  const extractFileName = (path: string) => path.split('\\').pop();
+
+  // 注册 GetSdModels 指令
+  ctx.command('sd.models', '获取可用的SD模型')
+    .action(async ({ session }) => {
+      try {
+        const response = await ctx.http('get', `${config.endpoint}/sdapi/v1/sd-models`);
+        const models = response.data;
+        log.debug('获取SD模型:', models);
+
+        const result = models.map((model: { filename: string; model_name: string; }) => {
+          const fileName = extractFileName(model.filename);
+          return `模型名称: ${model.model_name}\n文件名: ${fileName}`;
+        }).join('\n\n');
+
+        return result || '未找到可用的SD模型。';
+      } catch (error) {
+        log.error('获取SD模型时出错:', error);
+        return `获取SD模型时出错: ${error.message}`;
+      }
+    });
+
+
+  // 注册 GetSdVaes 指令
+  ctx.command('sd.vaes', '获取可用的SD VAE模型')
+    .action(async ({ session }) => {
+      try {
+        const response = await ctx.http('get', `${config.endpoint}/sdapi/v1/sd-vae`);
+        const vaes = response.data;
+        log.debug('获取SD VAE模型:', vaes);
+
+        const result = vaes.map((vae: { filename: string; model_name: string; }) => {
+          const fileName = extractFileName(vae.filename);
+          return `模型名称: ${vae.model_name}\n文件名: ${fileName}`;
+        }).join('\n\n');
+
+        return result || '未找到可用的SD VAE模型。';
+      } catch (error) {
+        log.error('获取SD VAE模型时出错:', error);
+        return `获取SD VAE模型时出错: ${error.message}`;
+      }
+    });
+
+
+  // 注册 GetEmbeddings 指令
+  ctx.command('sd.embeddings', '获取当前模型可加载和不兼容的嵌入')
+    .action(async ({ session }) => {
+      try {
+        const response = await ctx.http('get', `${config.endpoint}/sdapi/v1/embeddings`);
+        const embeddings = response.data;
+        log.debug('获取嵌入:', embeddings);
+
+        const loadedEmbeddings = Object.keys(embeddings.loaded).map(key => `可加载的嵌入: ${key}`).join('\n');
+        const skippedEmbeddings = Object.keys(embeddings.skipped).map(key => `不兼容的嵌入: ${key}`).join('\n');
+
+        const result = `${loadedEmbeddings}\n\n${skippedEmbeddings}`;
+
+        return result || '未找到嵌入信息。';
+      } catch (error) {
+        log.error('获取嵌入时出错:', error);
+        return `获取嵌入时出错: ${error.message}`;
+      }
+    });
+
+
+  // 注册 GetLoras 指令
+  ctx.command('sd.loras', '获取当前模型加载的Loras')
+    .action(async ({ session }) => {
+      try {
+        const response = await ctx.http('get', `${config.endpoint}/sdapi/v1/loras`);
+        const loras = response.data;
+        log.debug('获取Loras:', loras);
+
+        const result = loras.map((lora: { path: string; name: string; }) => {
+          const fileName = extractFileName(lora.path);
+          return `名称: ${lora.name}\n文件名: ${fileName}`;
+        }).join('\n\n');
+
+        return result || '未找到Loras信息。';
+      } catch (error) {
+        log.error('获取Loras时出错:', error);
+        return `获取Loras时出错: ${error.message}`;
+      }
+    });
 
 
 }

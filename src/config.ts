@@ -96,7 +96,9 @@ export const Config = Schema.intersect([
       '详细信息'
     ]).default('仅图片').description('输出方式'),
     hiresFix: Schema.boolean()
-      .default(false).description('是否启用高分辨率修复'),
+      .default(false).description('是否启用高分辨率修复').disabled(),
+    restoreFaces: Schema.boolean()
+      .default(false).description('是否启用人脸修复').disabled(),
     save: Schema.boolean()
       .default(false).description('是否保存图片到本地'),
   }).description('其他设置'),
