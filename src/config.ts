@@ -3,9 +3,9 @@ export const log = new Logger('sd-webui-api');
 
 export interface Config {
   endpoint: string; // API端点
+  save: boolean; // 是否保存到本地
   sampler: any; // 采样器选项
   scheduler: any; // 调度器选项
-  clipSkip: number; // CLIP模型skip层数
   imageSize: any; // 图片尺寸
   cfgScale: number; // CFG Scale
   txt2imgSteps: number; // 文生图步骤数
@@ -15,12 +15,12 @@ export interface Config {
   negativePrompt: string; // 负向提示词
   promptPrepend: boolean; // 正向提示词是否前置
   negativePromptPrepend: boolean; // 负向提示词是否前置
-  outputMethod: any;  // 输出方式
-  hiresFix: boolean; // 是否使用高分辨率修复
   restoreFaces: boolean; // 是否使用人脸修复
-  save: boolean; // 是否保存到本地
+  hiresFix: boolean; // 是否使用高分辨率修复
+  outputMethod: any;  // 输出方式
+  clipSkip: number; // CLIP模型skip层数
   useTranslation: boolean; // 是否使用翻译服务
-  maxTasks: number;
+  maxTasks: number; // 最大任务数
 }
 
 // 配置约束
@@ -28,6 +28,8 @@ export const Config = Schema.intersect([
   Schema.object({
     endpoint: Schema.string()
       .default('http://127.0.0.1:7860').description('SD-WebUI API的网络地址'),
+    save: Schema.boolean()
+      .default(false).description('是否保存图片到本地'),
     sampler: Schema.union([
       'DPM++ 2M',
       'DPM++ SDE',
@@ -59,9 +61,6 @@ export const Config = Schema.intersect([
       'SGM Uniform'
     ])
       .default('Automatic').description('调度器选项'),
-    clipSkip: Schema.number()
-      .default(2)
-      .description('跳过CLIP模型的前几层，以减少计算成本'),
     imageSize: Schema.tuple([Schema.number(), Schema.number()])
       .default([512, 512]).description(`生成图像的宽度和高度(16的倍数)
   - 模板：
@@ -89,20 +88,20 @@ export const Config = Schema.intersect([
       .default(true).description('正向提示词是否添加在指令提示词之前'),
     negativePromptPrepend: Schema.boolean()
       .default(true).description('负向提示词是否添加在指令提示词之前'),
-
+    restoreFaces: Schema.boolean()
+      .default(false).description('是否启用人脸修复').disabled(),
+    hiresFix: Schema.boolean()
+      .default(false).description('是否启用高分辨率修复').disabled(),
   }).description('基础设置'),
   Schema.object({
     outputMethod: Schema.union([
       '仅图片',
-      '图片和关键信息',
+      '关键信息',
       '详细信息'
     ]).default('仅图片').description('输出方式'),
-    hiresFix: Schema.boolean()
-      .default(false).description('是否启用高分辨率修复').disabled(),
-    restoreFaces: Schema.boolean()
-      .default(false).description('是否启用人脸修复').disabled(),
-    save: Schema.boolean()
-      .default(false).description('是否保存图片到本地'),
+    clipSkip: Schema.number()
+      .default(2)
+      .description('跳过CLIP模型的前几层，以减少计算成本'),
   }).description('其他设置'),
   Schema.object({
     useTranslation: Schema.boolean()

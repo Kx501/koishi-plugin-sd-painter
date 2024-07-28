@@ -42,11 +42,11 @@ export async function apply(ctx: Context, config: Config) {
     .option('vae', '-v <vae_name> 单次切换Vae模型')
     .action(async ({ options, session }, _) => {
       if (!maxTasks || numberOfTasks < maxTasks) {
-        addTask();
-        // 计算耗时
-        let start = performance.now();
-
         try {
+          addTask();
+          // 计算耗时
+          let start = performance.now();
+
           log.debug('传入提示词:', _);
           log.debug('调用子指令:', options);
 
@@ -111,14 +111,14 @@ export async function apply(ctx: Context, config: Config) {
           const request = {
             prompt: finalPrompt,
             negative_prompt: finalNegativePrompt,
+            seed: seed,
+            sampler_name: samplerName,
+            scheduler: schedulerName,
             steps: Math.min(steps, maxSteps),
             cfg_scale: cfg,
             width: size[0],
             height: size[1],
-            seed: seed,
-            sampler_name: samplerName,
-            scheduler: schedulerName,
-            clip_skip: clipSkip,
+            restore_faces: restoreFaces,
             save_images: save,
             override_settings: {
               ...(modelName && { sd_model_checkpoint: modelName }), // 只有当提供了模型名称时才添加
@@ -175,13 +175,8 @@ export async function apply(ctx: Context, config: Config) {
 
           removeTask();
           return h.img(imgBuffer, 'image/png');
-
         } catch (error) {
           log.error('错误:', error);
-
-          let end = performance.now();
-          log.debug(`总耗时: ${end - start} ms`);
-
           removeTask();
           return `错误: ${error.message}`;
         }
@@ -222,8 +217,8 @@ export async function apply(ctx: Context, config: Config) {
     .option('model', '-m <model:string> 使用的模型')
     .action(async ({ options, session }, image) => {
       if (!maxTasks || numberOfTasks < maxTasks) {
-        addTask();
         try {
+          addTask();
           log.debug('传入图像:', image);
           log.debug('调用子指令:', options);
 
@@ -280,7 +275,7 @@ export async function apply(ctx: Context, config: Config) {
     .option('sd', '-s 查询/切换SD模型')
     .option('vae', '-v 查询/切换Vae模型')
     .option('embeddeding', '-e 查询可用的嵌入模型')
-    .option('hybridnetwork', '-h 查询可用的超网络模型')
+    .option('hybridnetwork', '-n 查询可用的超网络模型')
     .option('lora', '-l 查询可用的loras模型')
     .action(async ({ session, options }, _1, _2) => {
       if (!maxTasks || numberOfTasks < maxTasks) {
@@ -309,18 +304,31 @@ export async function apply(ctx: Context, config: Config) {
           }
           // 切换
           else if ((_1 || _2) && (sd || vae)) {
-            const request = {
-              override_settings: {
-                ...(sdName && { sd_model_checkpoint: _1 }), // 只有当提供了模型名称时才添加
-                ...(vaeName && { sd_vae: _2 }),  // 只有当提供了 VAE 名称时才添加
-              },
-              override_settings_restore_afterwards: false,
+
+            try {
+              addTask();
+              const request = {
+                override_settings: {
+                  ...(sdName && { sd_model_checkpoint: _1 }), // 只有当提供了模型名称时才添加
+                  ...(vaeName && { sd_vae: _2 }),  // 只有当提供了 VAE 名称时才添加
+                },
+                override_settings_restore_afterwards: false,
+              }
+
+              session.send('模型切换中...')
+
+              const response = await ctx.http('post', `${endpoint}/sdapi/v1/img2img`, {
+                data: request,
+              });
+
+              removeTask();
+              return '模型更换成功'
+            } catch (error) {
+              log.error('切换模型时出错:', error);
+
+              removeTask();
+              return `切换模型时出错: ${error.message}`;
             }
-
-            const response = await ctx.http('post', `${endpoint}/sdapi/v1/img2img`, {
-              data: request,
-            });
-
           }
 
           if (embeddeding) {
@@ -364,15 +372,13 @@ export async function apply(ctx: Context, config: Config) {
           }
 
         } catch (error) {
-          if (embeddeding || hybridnetwork || lora || sd || vae && !_1 && !_2) {
-            log.error('查询模型时出错:', error);
-            return `查询模型时出错: ${error.message}`;
-          }
+          log.error('查询模型时出错:', error);
+          return `查询模型时出错: ${error.message}`;
         }
       } else {
         session.send(Random.pick([
           '忙不过来了，走开走开！',
-          '你怎么那么多事，（恼',
+          '你怎么这么多事，（恼',
           '要被玩坏啦！'
         ]));
       }
