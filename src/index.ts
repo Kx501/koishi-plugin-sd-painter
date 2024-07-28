@@ -264,7 +264,7 @@ export async function apply(ctx: Context, config: Config) {
         }
       } else {
         session.send(Random.pick([
-          '这个任务有点难，我不想做>_<',
+          '这个任务有点难，我不想接>_<',
           '脑子转不过来了，啊吧啊吧--',
           '推导不出来，你来推吧！'
         ]));
