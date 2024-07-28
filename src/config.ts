@@ -74,7 +74,7 @@ export const Config: Schema<Config> = Schema.intersect([
   - 1920x1080
   `),
     cfgScale: Schema.number()
-      .default(7).description('提示词引导系数，用于控制图像服从提示词程度'),
+      .default(7).description('引导系数，用于控制图像对提示词服从程度'),
     txt2imgSteps: Schema.number()
       .default(20).description('文生图默认采样步数'),
     img2imgSteps: Schema.number()
@@ -86,9 +86,9 @@ export const Config: Schema<Config> = Schema.intersect([
     negativePrompt: Schema.string()
       .default('').description('默认负向提示词'),
     promptPrepend: Schema.boolean()
-      .default(true).description('正向提示词是否添加在指令提示词之前'),
+      .default(true).description('默认正向提示词是否放在最前面'),
     negativePromptPrepend: Schema.boolean()
-      .default(true).description('负向提示词是否添加在指令提示词之前'),
+      .default(true).description('默认负向提示词是否放在最前面'),
     restoreFaces: Schema.boolean()
       .default(false).description('是否启用人脸修复').disabled(),
     hiresFix: Schema.boolean()
@@ -119,13 +119,20 @@ export const Config: Schema<Config> = Schema.intersect([
       '关键信息',
       '详细信息'
     ]).default('仅图片').description('输出方式'),
+    maxPrompt: Schema.number()
+      .default(30).description('最大提示词数限制，一个逗号计一个'),
+    excessProcessing: Schema.union([
+      '删除',
+      '仅提示',
+      '删除并提示'
+    ]).default('删除').description('提示词超限处理'),
     setConfig: Schema.boolean()
       .default(false).description('是否启用指令修改SD全局设置'),
   }).description('其他设置'),
   Schema.object({
     useTranslation: Schema.boolean()
-      .default(false).description('是否启用翻译服务以处理非英文提示词'),
+      .default(false).description('是否启用翻译服务处理非英文提示词'),
     maxTasks: Schema.number()
-      .default(3).description('最大任务数'),
+      .default(3).description('最大任务数限制'),
   }).description('拓展功能'),
 ]);
