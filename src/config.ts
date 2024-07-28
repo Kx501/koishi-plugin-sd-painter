@@ -17,6 +17,7 @@ export interface Config {
   negativePromptPrepend: boolean; // 负向提示词是否前置
   outputMethod: any;  // 输出方式
   hiresFix: boolean; // 是否使用高分辨率修复
+  restoreFaces: boolean; // 是否使用人脸修复
   save: boolean; // 是否保存到本地
   useTranslation: boolean; // 是否使用翻译服务
   maxTasks: number;
@@ -88,6 +89,7 @@ export const Config = Schema.intersect([
       .default(true).description('正向提示词是否添加在指令提示词之前'),
     negativePromptPrepend: Schema.boolean()
       .default(true).description('负向提示词是否添加在指令提示词之前'),
+
   }).description('基础设置'),
   Schema.object({
     outputMethod: Schema.union([

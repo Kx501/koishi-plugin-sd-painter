@@ -15,7 +15,7 @@ export async function apply(ctx: Context, config: Config) {
   // 调试用
   ctx.on('message-created', (session: Session) => { log.debug(h.select(session.elements, 'img')) }, true)
 
-  const { endpoint, useTranslation, maxTasks } = config;
+  const { endpoint, maxTasks } = config;
   let numberOfTasks = 0;
 
   // 添加任务
@@ -24,20 +24,22 @@ export async function apply(ctx: Context, config: Config) {
   const removeTask = () => numberOfTasks--;
 
   // 注册 text2img/img2img 指令
-  ctx.command('sd [prompt]', '提示词，有空格首位用引号括起来')
-    .option('negative', '-n <tags> 负向提示词，有空格首位用引号括起来')
+  ctx.command('sd [prompt]', 'AI画图')
+    .option('negative', '-n <tags> 负向提示词，如果有空格首尾用引号括起来')
     .option('img2img', '-i [imgURL] 图生图，@图片或输入链接')
     .option('steps', '-s <number> 采样步数')
-    .option('cfg', '-c <number> 服从提示词程度')
+    .option('cfgScale', '-c <number> 提示词服从度')
     .option('size', '-si <宽x高> 图像尺寸')
     .option('seed', '-se <number> 随机种子')
-    .option('noPositiveTags', '-P 禁用默认正向提示词')
-    .option('noNegativeTags', '-N 禁用默认负向提示词')
     .option('sampler', '-sa <name> 采样器')
     .option('scheduler', '-sc <name> 调度器')
-    .option('modelVae', '-mv <model_name> [vae_name] [temp] 切换模型、[vae], [临时切换? :Y]')
-    .option('hiresFix', '-H 启用高分辨率修复')
+    .option('noPositiveTags', '-P 禁用默认正向提示词')
+    .option('noNegativeTags', '-N 禁用默认负向提示词')
+    // .option('hiresFix', '-H 禁用高分辨率修复')
+    // .option('restoreFaces', '-R 禁用人脸修复')
     .option('noTranslate', '-T 禁止使用翻译服务')
+    .option('model', '-m <model_name> 单次切换SD模型')
+    .option('vae', '-v <vae_name> 单次切换Vae模型')
     .action(async ({ options, session }, pPrompt) => {
       if (!maxTasks || numberOfTasks < maxTasks) {
         addTask();
@@ -48,20 +50,20 @@ export async function apply(ctx: Context, config: Config) {
           log.debug('调用子指令:', options);
 
           // 直接从config对象中读取配置
-          const { imageSize, sampler, scheduler, clipSkip, cfgScale, txt2imgSteps, img2imgSteps, maxSteps, prompt, negativePrompt, promptPrepend, negativePromptPrepend, hiresFix, save } = config;
+          const { imageSize, sampler, scheduler, clipSkip, cfgScale, txt2imgSteps, img2imgSteps, maxSteps, prompt, negativePrompt, promptPrepend, negativePromptPrepend, hiresFix, restoreFaces, useTranslation, save } = config;
 
           // 用户选项覆盖默认配置
           let initImages = options.img2img;
           const steps = options.steps || (initImages ? img2imgSteps : txt2imgSteps);
-          const cfg = options.cfg || cfgScale;
+          const cfg = options.cfgScale || cfgScale;
           const size = options.size ? options.size.split('x').map(Number) : imageSize;
           const seed = options.seed || -1;
           const samplerName = options.sampler || sampler;
           const schedulerName = options.scheduler || scheduler;
-          const hr = options.hiresFix || hiresFix;
-          const modelVae = options.modelVae || '';
+          const modelName = options.model;
+          const vaeName = options.vae;
 
-          log.debug('最终参数:', { steps, cfg, size, samplerName, schedulerName, modelVae });
+          log.debug('最终参数:', { steps, cfg, size, samplerName, schedulerName, modelName, vaeName });
 
           let tempPrompt = pPrompt,
             tempNegativePrompt = options.negative;
@@ -100,15 +102,18 @@ export async function apply(ctx: Context, config: Config) {
             }
           }
 
-          // 切换模型
-          // 解析 modelVae 参数
-          let [modelName, vaeName, temp] = modelVae.split(' ');
-          let isTemporary = temp === 'Y'; // 默认为 true，只有当 temp 为 'Y' 时才为 true
+          // if (hiresFix && !options.hiresFix) { }
+          // if (restoreFaces && !options.restoreFaces) { }
 
-          // 如果 temp 未提供，则 isTemporary 保持默认值 true
-          if (temp === undefined) {
-            isTemporary = true;
-          }
+
+          // // 切换模型
+          // let isTemporary = temp === 'Y'; // 默认为 true，只有当 temp 为 'Y' 时才为 true
+
+          // // 如果 temp 未提供，则 isTemporary 保持默认值 true
+          // if (temp === undefined) {
+          //   isTemporary = true;
+          // }
+
 
           // 构建API请求体
           let request = {
@@ -122,13 +127,12 @@ export async function apply(ctx: Context, config: Config) {
             sampler_name: samplerName,
             scheduler: schedulerName,
             clip_skip: clipSkip,
-            enable_hr: hr,
             save_images: save,
             override_settings: {
               ...(modelName && { sd_model_checkpoint: modelName }), // 只有当提供了模型名称时才添加
               ...(vaeName && { sd_vae: vaeName }),  // 只有当提供了 VAE 名称时才添加
             },
-            override_settings_restore_afterwards: isTemporary,
+            // override_settings_restore_afterwards: isTemporary,
             ...(initImages && { init_images: [initImages] }), // 只有当提供了 init_images 时才添加
           }
 
@@ -151,13 +155,11 @@ export async function apply(ctx: Context, config: Config) {
             // 调用 img2imgAPI
             response = await ctx.http('post', `${endpoint}/sdapi/v1/img2img`, {
               data: request,
-              headers: { 'Content-Type': 'application/json' },
             });
           } else {
             // 调用 txt2imgAPI
             response = await ctx.http('post', `${endpoint}/sdapi/v1/txt2img`, {
               data: request,
-              headers: { 'Content-Type': 'application/json' },
             });
           }
 
@@ -167,10 +169,10 @@ export async function apply(ctx: Context, config: Config) {
           const imgBuffer = Buffer.from(response.data.images[0], 'base64');
 
           if (config.outputMethod === '图片和关键信息') {
-            session.send(`步数:${steps}, 引导:${cfg}, 尺寸:${size}, 采样:${samplerName}, 调度:${schedulerName}`);
-            session.send(`正向: ${finalPrompt}`);
+            session.send(`步数:${steps}\n尺寸:${size}\n服从度:${cfg}\n采样器:${samplerName}\n调度器:${schedulerName}`);
+            session.send(`正向提示词:\n${finalPrompt}`);
             if (options.negative !== undefined) {
-              session.send(`负向: ${finalNegativePrompt}`);
+              session.send(`负向提示词:\n${finalNegativePrompt}`);
             }
           } else if (config.outputMethod === '详细信息') {
             session.send(JSON.stringify(request, null, 4))
@@ -210,7 +212,6 @@ export async function apply(ctx: Context, config: Config) {
 
         // 调用 Interruptapi
         const response = await ctx.http('post', `${endpoint}/sdapi/v1/interrupt`, {
-          headers: { 'Content-Type': 'application/json' },
         });
 
         log.debug('API响应数据:', response);
@@ -225,36 +226,55 @@ export async function apply(ctx: Context, config: Config) {
 
 
   // 注册 Interrogateapi 指令
-  ctx.command('sdtag [image]', '图像生成提示词')
+  ctx.command('sdtag [image]', '图片生成提示词')
     .option('model', '-m <model:string> 使用的模型')
     .action(async ({ options, session }, image) => {
-      addTask();
-      try {
-        log.debug('传入图像:', image);
-        log.debug('调用子指令:', options);
+      if (!maxTasks || numberOfTasks < maxTasks) {
+        addTask();
+        try {
+          log.debug('传入图像:', image);
+          log.debug('调用子指令:', options);
 
-        const request = {
-          image: image || '',
-          model: options.model || ''
-        };
+          const request = {
+            image: image || '',
+            model: options.model || ''
+          };
 
-        log.debug('API请求体:', request);
+          log.debug('API请求体:', request);
 
-        // 调用 Interrogateapi
-        const response = await ctx.http('post', `${endpoint}/sdapi/v1/interrogate`, {
-          data: request,
-          headers: { 'Content-Type': 'application/json' },
-        });
+          if (numberOfTasks === 1) {
+            session.send(Random.pick([
+              '开始反推提示词',
+              '',
+              '少女绘画中……',
+              '正在创作中，请稍等片刻',
+              '笔墨已备好，画卷即将展开'
+            ]))
+          } else {
+            session.send(`在推了在推了，不过前面还有 ${numberOfTasks} 个任务……`)
+          }
 
-        log.debug('API响应状态:', response.statusText);
+          // 调用 Interrogateapi
+          const response = await ctx.http('post', `${endpoint}/sdapi/v1/interrogate`, {
+            data: request,
+          });
 
-        removeTask();
-        return `描述结果: ${response.data.description}`;
-      } catch (error) {
-        log.error('错误:', error);
+          log.debug('API响应状态:', response.statusText);
 
-        removeTask();
-        return `错误: ${error.message}`;
+          removeTask();
+          return `反推结果:\n${response.data.description}`;
+        } catch (error) {
+          log.error('错误:', error);
+
+          removeTask();
+          return `错误: ${error.message}`;
+        }
+      } else {
+        session.send(Random.pick([
+          '任务数上限了，等会儿再来吧...',
+          '脑子转不过来啦，啊吧啊吧~',
+          '要被玩坏啦！'
+        ]));
       }
     });
 
@@ -262,8 +282,15 @@ export async function apply(ctx: Context, config: Config) {
   // 提取路径最后一段
   const extractFileName = (path: string) => path.split('\\').pop();
 
+
+
   // 注册 GetSdModels 指令
-  ctx.command('sd.models', '获取可用的SD模型')
+  ctx.command('sdmodel [model_name]', '查询和切换模型')
+    .usage('输入<model_name>为切换模型，缺失时查询模型')
+    .option('sd', '-s 查询/切换SD模型')
+    .option('vae', '-v 查询/切换Vae模型')
+    .option('embedded', '-e 查询/切换Embeddeding模型')
+    .option('hybridnetwork', '-h 查询')
     .action(async ({ session }) => {
       try {
         const response = await ctx.http('get', `${config.endpoint}/sdapi/v1/sd-models`);
@@ -287,7 +314,7 @@ export async function apply(ctx: Context, config: Config) {
   ctx.command('sd.vaes', '获取可用的SD VAE模型')
     .action(async ({ session }) => {
       try {
-        const response = await ctx.http('get', `${config.endpoint}/sdapi/v1/sd-vae`);
+        const response = await ctx.http('get', `${endpoint}/sdapi/v1/sd-vae`);
         const vaes = response.data;
         log.debug('获取SD VAE模型:', vaes);
 
@@ -305,43 +332,68 @@ export async function apply(ctx: Context, config: Config) {
 
 
   // 注册 GetEmbeddings 指令
-  ctx.command('sd.embeddings', '获取当前模型可加载和不兼容的嵌入')
+  ctx.command('sd.embeddings', '获取当前SD模型可加载和不兼容的嵌入模型')
     .action(async ({ session }) => {
       try {
-        const response = await ctx.http('get', `${config.endpoint}/sdapi/v1/embeddings`);
+        const response = await ctx.http('get', `${endpoint}/sdapi/v1/embeddings`);
         const embeddings = response.data;
-        log.debug('获取嵌入:', embeddings);
+        log.debug('获取嵌入模型:', embeddings);
 
         const loadedEmbeddings = Object.keys(embeddings.loaded).map(key => `可加载的嵌入: ${key}`).join('\n');
         const skippedEmbeddings = Object.keys(embeddings.skipped).map(key => `不兼容的嵌入: ${key}`).join('\n');
 
         const result = `${loadedEmbeddings}\n\n${skippedEmbeddings}`;
 
-        return result || '未找到嵌入信息。';
+        return result || '未找到嵌入模型信息。';
       } catch (error) {
-        log.error('获取嵌入时出错:', error);
-        return `获取嵌入时出错: ${error.message}`;
+        log.error('获取嵌入模型时出错:', error);
+        return `获取嵌入模型时出错: ${error.message}`;
+      }
+    });
+
+
+  // 注册 GetHypernetworks 指令
+  ctx.command('sd.hypernetworks', '获取超网络模型信息')
+    .action(async ({ session }) => {
+      try {
+        // 调用 GetHypernetworks API
+        const response = await ctx.http('get', `${endpoint}/sdapi/v1/hypernetworks`, {
+        });
+        const hypernetworks = response.data;
+        log.debug('获取Hypernetworks模型',);
+
+        const result = hypernetworks.map((hn: { filename: string; model_name: string }) => {
+          const filename = extractFileName(hn.filename);
+          return `模型名称: ${hn.model_name}\n文件名: ${filename}`;
+        }).join('\n\n');
+
+        return result || '未找到超网络模型信息。';
+      } catch (error) {
+        log.error('获取超网络模型信息时出错:', error);
+
+        removeTask();
+        return `获取超网络模型信息时出错: ${error.message}`;
       }
     });
 
 
   // 注册 GetLoras 指令
-  ctx.command('sd.loras', '获取当前模型加载的Loras')
+  ctx.command('sd.loras', '获取当前模型加载的Loras模型')
     .action(async ({ session }) => {
       try {
-        const response = await ctx.http('get', `${config.endpoint}/sdapi/v1/loras`);
+        const response = await ctx.http('get', `${endpoint}/sdapi/v1/loras`);
         const loras = response.data;
         log.debug('获取Loras:', loras);
 
-        const result = loras.map((lora: { path: string; name: string; }) => {
-          const fileName = extractFileName(lora.path);
-          return `名称: ${lora.name}\n文件名: ${fileName}`;
+        const result = loras.map((lora: { filename: string; model_name: string; }) => {
+          const fileName = extractFileName(lora.filename);
+          return `名称: ${lora.model_name}\n文件名: ${fileName}`;
         }).join('\n\n');
 
         return result || '未找到Loras信息。';
       } catch (error) {
-        log.error('获取Loras时出错:', error);
-        return `获取Loras时出错: ${error.message}`;
+        log.error('获取Loras模型时出错:', error);
+        return `获取Loras模型时出错: ${error.message}`;
       }
     });
 
