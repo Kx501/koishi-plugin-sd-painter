@@ -78,7 +78,7 @@ export async function apply(ctx: Context, config: Config) {
             if (!hasProtocol(initImages)) {
               // 只测试了OneBot，不适用于控制台沙盒
               initImages = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
-              if (!initImages) return '请引用图片消息或输入图片链接'
+              if (!initImages) return '请检查图片链接或引用图片消息'
             }
             log.debug('图生图参数处理结果:', initImages);
           }
@@ -242,7 +242,7 @@ export async function apply(ctx: Context, config: Config) {
           const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
           if (!hasProtocol(_)) {
             _ = h.select(session.elements, 'img')[0]?.attrs.src;
-            if (_ === undefined) return '请引用图片消息或检查图片链接';
+            if (_ === undefined) return '请检查图片链接或引用图片消息';
           }
 
           log.debug('传入图像:', _);
