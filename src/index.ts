@@ -7,8 +7,19 @@ export const inject = {
   required: ['http'],
   optional: ['puppeteer', 'translator']
 }
-
 export * from './config'
+
+export const usage = `
+### 插件功能列表
+
+* 功能 1：文/图生图
+* 功能 2：提示词反推
+* 功能 3：查询/切换模型
+
+### 注意事项
+
+1. 子指令可以直接调用
+`;
 
 // 插件主函数
 export async function apply(ctx: Context, config: Config) {
@@ -47,17 +58,17 @@ export async function apply(ctx: Context, config: Config) {
         addTask();
 
         try {
-          log.debug('传入提示词:', _);
+          log.debug('调用绘图 API');
           log.debug('选择子选项:', options);
 
           // 直接从config对象中读取配置
           const { imageSize, sampler, scheduler, cfgScale, txt2imgSteps, img2imgSteps, maxSteps, prompt, negativePrompt, promptPrepend, negativePromptPrepend, hiresFix, restoreFaces, save } = config;
 
           // 图生图
-          let initImages = options.img2img;
+          let initImages = options?.img2img;
 
           if (initImages) {
-            log.debug('执行图生图')
+            log.debug('开始获取图片');
 
             const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
             if (!hasProtocol(initImages)) {
@@ -68,19 +79,19 @@ export async function apply(ctx: Context, config: Config) {
 
 
           // 用户选项覆盖默认配置
-          const steps = options.steps || (initImages ? img2imgSteps : txt2imgSteps);
-          const cfg = options.cfgScale || cfgScale;
-          const size = options.size ? options.size.split('x').map(Number) : imageSize;
-          const seed = options.seed || -1;
-          const samplerName = options.sampler || sampler;
-          const schedulerName = options.scheduler || scheduler;
-          const modelName = options.model;
-          const vaeName = options.vae;
+          const steps = options?.steps || (initImages ? img2imgSteps : txt2imgSteps);
+          const cfg = options?.cfgScale || cfgScale;
+          const size = options?.size ? options?.size.split('x').map(Number) : imageSize;
+          const seed = options?.seed || -1;
+          const samplerName = options?.sampler || sampler;
+          const schedulerName = options?.scheduler || scheduler;
+          const modelName = options?.model;
+          const vaeName = options?.vae;
 
           log.debug('最终参数:', { steps, cfg, size, samplerName, schedulerName, modelName, vaeName });
 
           let tempPrompt = _,
-            tempNegativePrompt = options.negative;
+            tempNegativePrompt = options?.negative;
 
           // 构建最终的 prompt 和 negativePrompt
 
@@ -89,7 +100,7 @@ export async function apply(ctx: Context, config: Config) {
 
           log.debug('提示词翻译为:', tempPrompt);
 
-          if (options.negative !== undefined) {
+          if (tempNegativePrompt !== undefined) {
             tempNegativePrompt = promptHandle(ctx, config, tempNegativePrompt);
 
             log.debug('负向提示词翻译为:', tempNegativePrompt);
@@ -106,8 +117,8 @@ export async function apply(ctx: Context, config: Config) {
 
           log.debug('最终提示词:', finalPrompt, '\n负向:', finalNegativePrompt);
 
-          // if (hiresFix && !options.hiresFix) { }
-          // if (restoreFaces && !options.restoreFaces) { }
+          // if (hiresFix && !options?.hiresFix) { }
+          // if (restoreFaces && !options?.restoreFaces) { }
 
 
           // 构建API请求体
@@ -166,24 +177,22 @@ export async function apply(ctx: Context, config: Config) {
           if (config.outputMethod === '图片和关键信息') {
             session.send(`步数:${steps}\n尺寸:${size}\n服从度:${cfg}\n采样器:${samplerName}\n调度器:${schedulerName}`);
             session.send(`正向提示词:\n${finalPrompt}`);
-            if (options.negative !== undefined) {
+            if (options?.negative !== undefined) {
               session.send(`负向提示词:\n${finalNegativePrompt}`);
             }
           } else if (config.outputMethod === '详细信息') {
             session.send(JSON.stringify(request, null, 4))
           }
 
+          removeTask();
+          let end = performance.now();
+          log.debug(`总耗时: ${end - start} ms`);
           return h.img(imgBuffer, 'image/png');
         } catch (error) {
           log.error('错误:', error);
-
+          removeTask();
           return `错误: ${error.message}`;
         }
-
-        removeTask();
-        let end = performance.now();
-        log.debug(`总耗时: ${end - start} ms`);
-
       } else {
         // 超过最大任务数的处理逻辑
         session.send(Random.pick([
@@ -196,10 +205,10 @@ export async function apply(ctx: Context, config: Config) {
 
 
   // 注册 Interruptapi 指令
-  ctx.command('sdstop', '中断当前操作')
+  ctx.command('sd').subcommand('sdstop', '中断当前操作')
     .action(async () => {
       try {
-        log.debug('调用 Interruptapi');
+        log.debug('调用中断 API');
 
         // 调用 Interruptapi
         const response = await ctx.http('post', `${endpoint}/sdapi/v1/interrupt`, {
@@ -217,13 +226,14 @@ export async function apply(ctx: Context, config: Config) {
 
 
   // 注册 Interrogateapi 指令
-  ctx.command('sdtag [imgURL]', '图片生成提示词')
+  ctx.command('sd').subcommand('sdtag [imgURL]', '图片生成提示词')
     .option('model', '-m <model:string> 使用的模型')
     .action(async ({ options, session }, _) => {
       if (!maxTasks || numberOfTasks < maxTasks) {
         addTask();
 
         try {
+          log.debug('调用反推 API');
           // 获取图片
           const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
           if (!hasProtocol(_)) {
@@ -236,7 +246,7 @@ export async function apply(ctx: Context, config: Config) {
 
           const request = {
             image: _,
-            model: options.model || config.wd14tagger
+            model: options?.model || config?.wd14tagger
           };
 
           log.debug('API请求体:', request);
@@ -258,13 +268,15 @@ export async function apply(ctx: Context, config: Config) {
 
           log.debug('API响应状态:', response.statusText);
 
+          removeTask();
           return `反推结果:\n${response.data.description}`;
         } catch (error) {
           log.error('错误:', error);
+          removeTask();
           return `错误: ${error.message}`;
         }
 
-        removeTask();
+
 
       } else {
         session.send(Random.pick([
@@ -280,7 +292,7 @@ export async function apply(ctx: Context, config: Config) {
   const extractFileName = (path: string) => path.split('\\').pop();
 
   // 注册 GetModels 指令
-  ctx.command('sdmodel [sd_name] [vae_name]', '查询和切换模型')
+  ctx.command('sd').subcommand('sdmodel [sd_name] [vae_name]', '查询和切换模型')
     .usage('输入<model_name>为切换模型，缺失时查询模型')
     .option('sd', '-s 查询/切换SD模型')
     .option('vae', '-v 查询/切换Vae模型')
@@ -288,22 +300,28 @@ export async function apply(ctx: Context, config: Config) {
     .option('hybridnetwork', '-n 查询可用的超网络模型')
     .option('lora', '-l 查询可用的loras模型')
     .action(async ({ session, options }, _1, _2) => {
-      if (!options) return '请选择指令选项！';
-      const sd = options.sd;
-      const vae = options.vae;
-      const embeddeding = options.embeddeding;
-      const hybridnetwork = options.hybridnetwork;
-      const lora = options.lora;
+      log.debug('选择子选项', options)
+
+      if (!Object.keys(options).length) {
+        log.debug('没有选择子选项，退回');
+        return '请选择指令选项！';
+      }
+      const sd = options?.sd;
+      const vae = options?.vae;
+      const embeddeding = options?.embeddeding;
+      const hybridnetwork = options?.hybridnetwork;
+      const lora = options?.lora;
       const sdName = _1;
       const vaeName = _2;
 
       try {
         // 查询
         if ((sd || vae) && !(_1 || _2)) {
+          log.debug('调用查询SD模型 API');
           const path = sd ? 'sd-models' : 'sd-vae';
           const response = await ctx.http('get', `${endpoint}/sdapi/v1/${path}`);
+          log.debug('API响应状态:', response.statusText);
           const models = response.data;
-          log.debug(`获取${sd ? 'SD' : 'SD VAE'}模型:`, models);
 
           const result = models.map((model: { filename: string; model_name: string; }) => {
             const fileName = extractFileName(model.filename);
@@ -317,6 +335,7 @@ export async function apply(ctx: Context, config: Config) {
           if ((_1 || _2) && (sd || vae)) {
             addTask();
             try {
+              log.debug('调用切换模型 API');
               const request = {
                 override_settings: {
                   ...(sdName && { sd_model_checkpoint: _1 }), // 只有当提供了模型名称时才添加
@@ -330,15 +349,15 @@ export async function apply(ctx: Context, config: Config) {
               const response = await ctx.http('post', `${endpoint}/sdapi/v1/img2img`, {
                 data: request,
               });
+              log.debug('API响应状态:', response.statusText);
 
+              removeTask();
               return '模型更换成功'
             } catch (error) {
               log.error('切换模型时出错:', error);
+              removeTask();
               return `切换模型时出错: ${error.message}`;
             }
-
-            removeTask();
-
           }
         } else {
           session.send(Random.pick([
@@ -349,9 +368,10 @@ export async function apply(ctx: Context, config: Config) {
         }
 
         if (embeddeding) {
+          log.debug('调用获取嵌入模型 API');
           const response = await ctx.http('get', `${endpoint}/sdapi/v1/embeddings`);
+          log.debug('API响应状态:', response.statusText);
           const embeddings = response.data;
-          log.debug('获取嵌入模型:', embeddings);
 
           const loadedEmbeddings = Object.keys(embeddings.loaded).map(key => `可加载的嵌入: ${key}`).join('\n');
           const skippedEmbeddings = Object.keys(embeddings.skipped).map(key => `不兼容的嵌入: ${key}`).join('\n');
@@ -362,10 +382,11 @@ export async function apply(ctx: Context, config: Config) {
         }
 
         if (hybridnetwork) {
+          log.debug('获取超网络模型 API');
           const response = await ctx.http('get', `${endpoint}/sdapi/v1/hypernetworks`, {
           });
+          log.debug('API响应状态:', response.statusText);
           const hypernetworks = response.data;
-          log.debug('获取Hypernetworks模型',);
 
           const result = hypernetworks.map((hn: { filename: string; model_name: string }) => {
             const filename = extractFileName(hn.filename);
@@ -376,9 +397,10 @@ export async function apply(ctx: Context, config: Config) {
         }
 
         if (lora) {
+          log.debug('调用获取Lora模型 API');
           const response = await ctx.http('get', `${endpoint}/sdapi/v1/loras`);
+          log.debug('API响应状态:', response.statusText);
           const loras = response.data;
-          log.debug('获取Loras:', loras);
 
           const result = loras.map((lora: { filename: string; model_name: string; }) => {
             const fileName = extractFileName(lora.filename);
@@ -396,25 +418,31 @@ export async function apply(ctx: Context, config: Config) {
 
 
   // 注册 Set Config 指令
-  ctx.command('sdset <configData>', '修改SD全局设置', {
+  ctx.command('sd').subcommand('sdset <configData>', '修改SD全局设置', {
     checkUnknown: true,
     checkArgCount: true
   })
     .action(async ({ session }, configData) => {
       if (config.setConfig) {
-        try {
-          const response = await ctx.http('post', `${endpoint}/sdapi/v1/options`, {
-            data: JSON.parse(configData),
-            headers: { 'Content-Type': 'application/json' },
-          });
-          log.debug('设置全局配置成功:', response);
-          return '配置已成功设置。';
-        } catch (error) {
-          log.error('设置全局配置时出错:', error);
-          if (error.response?.status === 422) {
-            return '配置数据验证错误，请检查提供的数据格式。';
+        if (numberOfTasks === 0) {
+          try {
+            log.debug('调用修改设置 API');
+            const response = await ctx.http('post', `${endpoint}/sdapi/v1/options`, {
+              data: JSON.parse(configData),
+              headers: { 'Content-Type': 'application/json' },
+            });
+            log.debug('API响应状态:', response.statusText);
+
+            return '配置已成功设置。';
+          } catch (error) {
+            log.error('设置全局配置时出错:', error);
+            if (error.response?.status === 422) {
+              return '配置数据验证错误，请检查提供的数据格式。';
+            }
+            return `设置配置时出错: ${error.message}`;
           }
-          return `设置配置时出错: ${error.message}`;
+        } else {
+          session.send('当前有任务在进行，请等待所有任务完成')
         }
       } else {
         session.send('管理员未启用该设置')
