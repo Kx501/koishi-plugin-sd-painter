@@ -71,7 +71,7 @@ export async function apply(ctx: Context, config: Config) {
           // 图生图
           let initImages = options?.img2img;
 
-          if (initImages) {
+          if (options.hasOwnProperty('img2img')) {
             log.debug('开始获取图片');
 
             const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
