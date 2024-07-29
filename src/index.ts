@@ -1,5 +1,5 @@
 import { Context, h, HTTP, Random, Session } from 'koishi';
-import { translateZH } from './utils'
+import { promptHandle } from './utils'
 import { Config, log } from './config';
 
 export const name = 'sd-webui-api';
@@ -42,19 +42,32 @@ export async function apply(ctx: Context, config: Config) {
     .option('vae', '-v <vae_name> 单次切换Vae模型')
     .action(async ({ options, session }, _) => {
       if (!maxTasks || numberOfTasks < maxTasks) {
-        try {
-          addTask();
-          // 计算耗时
-          let start = performance.now();
+        // 计算耗时
+        let start = performance.now();
+        addTask();
 
+        try {
           log.debug('传入提示词:', _);
           log.debug('选择子选项:', options);
 
           // 直接从config对象中读取配置
-          const { imageSize, sampler, scheduler, cfgScale, txt2imgSteps, img2imgSteps, maxSteps, prompt, negativePrompt, promptPrepend, negativePromptPrepend, hiresFix, restoreFaces, useTranslation, save } = config;
+          const { imageSize, sampler, scheduler, cfgScale, txt2imgSteps, img2imgSteps, maxSteps, prompt, negativePrompt, promptPrepend, negativePromptPrepend, hiresFix, restoreFaces, save } = config;
+
+          // 图生图
+          let initImages = options.img2img;
+
+          if (initImages) {
+            log.debug('执行图生图')
+
+            const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
+            if (!hasProtocol(initImages)) {
+              initImages = h.select(session.elements, 'img')[0]?.attrs.src;
+              if (initImages === undefined) return '请引用图片消息或检查图片链接';
+            }
+          }
+
 
           // 用户选项覆盖默认配置
-          let initImages = options.img2img;
           const steps = options.steps || (initImages ? img2imgSteps : txt2imgSteps);
           const cfg = options.cfgScale || cfgScale;
           const size = options.size ? options.size.split('x').map(Number) : imageSize;
@@ -70,19 +83,18 @@ export async function apply(ctx: Context, config: Config) {
             tempNegativePrompt = options.negative;
 
           // 构建最终的 prompt 和 negativePrompt
-          if (useTranslation && !options.noTranslate && ctx.translator) {
-            // 翻译
-            tempPrompt = await translateZH(ctx, tempPrompt);
 
-            log.debug('提示词翻译为:', tempPrompt);
+          // 翻译
+          tempPrompt = promptHandle(ctx, config, tempPrompt);
 
-            if (options.negative !== undefined) {
-              tempNegativePrompt = await translateZH(ctx, tempNegativePrompt);
+          log.debug('提示词翻译为:', tempPrompt);
 
-              log.debug('负向提示词翻译为:', tempNegativePrompt);
-            }
-            log.debug('所有翻译任务完成');
+          if (options.negative !== undefined) {
+            tempNegativePrompt = promptHandle(ctx, config, tempNegativePrompt);
+
+            log.debug('负向提示词翻译为:', tempNegativePrompt);
           }
+
 
           let finalPrompt = promptPrepend ? prompt : '';
           finalPrompt += tempPrompt;
@@ -92,16 +104,7 @@ export async function apply(ctx: Context, config: Config) {
           finalNegativePrompt += tempNegativePrompt || '';
           finalNegativePrompt += negativePromptPrepend ? '' : negativePrompt;
 
-          log.debug('最终提示词:', finalPrompt, '负向:', finalNegativePrompt);
-
-          // 图生图
-          if (initImages) {
-            const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
-            if (!hasProtocol(initImages)) {
-              initImages = h.select(session.elements, 'img')[0]?.attrs.src;
-              if (initImages === undefined) return '请引用图片消息或检查图片链接';
-            }
-          }
+          log.debug('最终提示词:', finalPrompt, '\n负向:', finalNegativePrompt);
 
           // if (hiresFix && !options.hiresFix) { }
           // if (restoreFaces && !options.restoreFaces) { }
@@ -170,16 +173,17 @@ export async function apply(ctx: Context, config: Config) {
             session.send(JSON.stringify(request, null, 4))
           }
 
-          let end = performance.now();
-          log.debug(`总耗时: ${end - start} ms`);
-
-          removeTask();
           return h.img(imgBuffer, 'image/png');
         } catch (error) {
           log.error('错误:', error);
-          removeTask();
+
           return `错误: ${error.message}`;
         }
+
+        removeTask();
+        let end = performance.now();
+        log.debug(`总耗时: ${end - start} ms`);
+
       } else {
         // 超过最大任务数的处理逻辑
         session.send(Random.pick([
@@ -217,9 +221,9 @@ export async function apply(ctx: Context, config: Config) {
     .option('model', '-m <model:string> 使用的模型')
     .action(async ({ options, session }, _) => {
       if (!maxTasks || numberOfTasks < maxTasks) {
-        try {
-          addTask();
+        addTask();
 
+        try {
           // 获取图片
           const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
           if (!hasProtocol(_)) {
@@ -254,14 +258,14 @@ export async function apply(ctx: Context, config: Config) {
 
           log.debug('API响应状态:', response.statusText);
 
-          removeTask();
           return `反推结果:\n${response.data.description}`;
         } catch (error) {
           log.error('错误:', error);
-
-          removeTask();
           return `错误: ${error.message}`;
         }
+
+        removeTask();
+
       } else {
         session.send(Random.pick([
           '这个任务有点难，我不想接>_<',
@@ -284,36 +288,35 @@ export async function apply(ctx: Context, config: Config) {
     .option('hybridnetwork', '-n 查询可用的超网络模型')
     .option('lora', '-l 查询可用的loras模型')
     .action(async ({ session, options }, _1, _2) => {
-      if (!maxTasks || numberOfTasks < maxTasks) {
-        if (!options) return '请选择指令选项！';
-        const sd = options.sd;
-        const vae = options.vae;
-        const embeddeding = options.embeddeding;
-        const hybridnetwork = options.hybridnetwork;
-        const lora = options.lora;
-        const sdName = _1;
-        const vaeName = _2;
+      if (!options) return '请选择指令选项！';
+      const sd = options.sd;
+      const vae = options.vae;
+      const embeddeding = options.embeddeding;
+      const hybridnetwork = options.hybridnetwork;
+      const lora = options.lora;
+      const sdName = _1;
+      const vaeName = _2;
 
-        try {
-          // 查询
-          if ((sd || vae) && !(_1 || _2)) {
-            const path = sd ? 'sd-models' : 'sd-vae';
-            const response = await ctx.http('get', `${endpoint}/sdapi/v1/${path}`);
-            const models = response.data;
-            log.debug(`获取${sd ? 'SD' : 'SD VAE'}模型:`, models);
+      try {
+        // 查询
+        if ((sd || vae) && !(_1 || _2)) {
+          const path = sd ? 'sd-models' : 'sd-vae';
+          const response = await ctx.http('get', `${endpoint}/sdapi/v1/${path}`);
+          const models = response.data;
+          log.debug(`获取${sd ? 'SD' : 'SD VAE'}模型:`, models);
 
-            const result = models.map((model: { filename: string; model_name: string; }) => {
-              const fileName = extractFileName(model.filename);
-              return `模型名称: ${model.model_name}\n文件名: ${fileName}`;
-            }).join('\n\n');
+          const result = models.map((model: { filename: string; model_name: string; }) => {
+            const fileName = extractFileName(model.filename);
+            return `模型名称: ${model.model_name}\n文件名: ${fileName}`;
+          }).join('\n\n');
 
-            return result || `未找到可用的${sd ? 'SD' : 'SD VAE'}模型。`;
-          }
-          // 切换
-          else if ((_1 || _2) && (sd || vae)) {
-
+          return result || `未找到可用的${sd ? 'SD' : 'SD VAE'}模型。`;
+        }
+        // 切换
+        else if (!maxTasks || numberOfTasks < maxTasks) {
+          if ((_1 || _2) && (sd || vae)) {
+            addTask();
             try {
-              addTask();
               const request = {
                 override_settings: {
                   ...(sdName && { sd_model_checkpoint: _1 }), // 只有当提供了模型名称时才添加
@@ -328,66 +331,66 @@ export async function apply(ctx: Context, config: Config) {
                 data: request,
               });
 
-              removeTask();
               return '模型更换成功'
             } catch (error) {
               log.error('切换模型时出错:', error);
-
-              removeTask();
               return `切换模型时出错: ${error.message}`;
             }
+
+            removeTask();
+
           }
-
-          if (embeddeding) {
-            const response = await ctx.http('get', `${endpoint}/sdapi/v1/embeddings`);
-            const embeddings = response.data;
-            log.debug('获取嵌入模型:', embeddings);
-
-            const loadedEmbeddings = Object.keys(embeddings.loaded).map(key => `可加载的嵌入: ${key}`).join('\n');
-            const skippedEmbeddings = Object.keys(embeddings.skipped).map(key => `不兼容的嵌入: ${key}`).join('\n');
-
-            const result = `${loadedEmbeddings}\n\n${skippedEmbeddings}`;
-
-            return result || '未找到嵌入模型信息。';
-          }
-
-          if (hybridnetwork) {
-            const response = await ctx.http('get', `${endpoint}/sdapi/v1/hypernetworks`, {
-            });
-            const hypernetworks = response.data;
-            log.debug('获取Hypernetworks模型',);
-
-            const result = hypernetworks.map((hn: { filename: string; model_name: string }) => {
-              const filename = extractFileName(hn.filename);
-              return `模型名称: ${hn.model_name}\n文件名: ${filename}`;
-            }).join('\n\n');
-
-            return result || '未找到超网络模型信息。';
-          }
-
-          if (lora) {
-            const response = await ctx.http('get', `${endpoint}/sdapi/v1/loras`);
-            const loras = response.data;
-            log.debug('获取Loras:', loras);
-
-            const result = loras.map((lora: { filename: string; model_name: string; }) => {
-              const fileName = extractFileName(lora.filename);
-              return `名称: ${lora.model_name}\n文件名: ${fileName}`;
-            }).join('\n\n');
-
-            return result || '未找到Loras信息。';
-          }
-
-        } catch (error) {
-          log.error('查询模型时出错:', error);
-          return `查询模型时出错: ${error.message}`;
+        } else {
+          session.send(Random.pick([
+            '忙不过来了，走开走开！',
+            '你怎么这么多事，（恼',
+            '要被玩坏啦！'
+          ]));
         }
-      } else {
-        session.send(Random.pick([
-          '忙不过来了，走开走开！',
-          '你怎么这么多事，（恼',
-          '要被玩坏啦！'
-        ]));
+
+        if (embeddeding) {
+          const response = await ctx.http('get', `${endpoint}/sdapi/v1/embeddings`);
+          const embeddings = response.data;
+          log.debug('获取嵌入模型:', embeddings);
+
+          const loadedEmbeddings = Object.keys(embeddings.loaded).map(key => `可加载的嵌入: ${key}`).join('\n');
+          const skippedEmbeddings = Object.keys(embeddings.skipped).map(key => `不兼容的嵌入: ${key}`).join('\n');
+
+          const result = `${loadedEmbeddings}\n\n${skippedEmbeddings}`;
+
+          return result || '未找到嵌入模型信息。';
+        }
+
+        if (hybridnetwork) {
+          const response = await ctx.http('get', `${endpoint}/sdapi/v1/hypernetworks`, {
+          });
+          const hypernetworks = response.data;
+          log.debug('获取Hypernetworks模型',);
+
+          const result = hypernetworks.map((hn: { filename: string; model_name: string }) => {
+            const filename = extractFileName(hn.filename);
+            return `模型名称: ${hn.model_name}\n文件名: ${filename}`;
+          }).join('\n\n');
+
+          return result || '未找到超网络模型信息。';
+        }
+
+        if (lora) {
+          const response = await ctx.http('get', `${endpoint}/sdapi/v1/loras`);
+          const loras = response.data;
+          log.debug('获取Loras:', loras);
+
+          const result = loras.map((lora: { filename: string; model_name: string; }) => {
+            const fileName = extractFileName(lora.filename);
+            return `名称: ${lora.model_name}\n文件名: ${fileName}`;
+          }).join('\n\n');
+
+          return result || '未找到Loras信息。';
+        }
+
+      } catch (error) {
+        log.error('查询模型时出错:', error);
+        return `查询模型时出错: ${error.message}`;
       }
     });
 

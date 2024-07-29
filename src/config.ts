@@ -20,7 +20,7 @@ export interface Config {
   wd14tagger: string; // 图像反推模型
   outputMethod: string;  // 输出方式
   maxPrompt: number;  //最大提示词数
-  excessProcessing: string;  //提示词超限处理方式
+  excessHandle: string;  //提示词超限处理方式
   setConfig: boolean; // 指令修改SD全局设置
   useTranslation: boolean; // 是否使用翻译服务
   maxTasks: number; // 最大任务数
@@ -83,9 +83,9 @@ export const Config: Schema<Config> = Schema.intersect([
       .default(40).description('图生图默认采样步数'),
     maxSteps: Schema.number()
       .default(60).description('最大允许采样步数'),
-    prompt: Schema.string()
+    prompt: Schema.string().role('textarea', { rows: [3, 8] })
       .default('').description('默认正向提示词'),
-    negativePrompt: Schema.string()
+    negativePrompt: Schema.string().role('textarea', { rows: [3, 8] })
       .default('').description('默认负向提示词'),
     promptPrepend: Schema.boolean()
       .default(true).description('默认正向提示词是否放在最前面'),
@@ -122,12 +122,12 @@ export const Config: Schema<Config> = Schema.intersect([
       '详细信息'
     ]).default('仅图片').description('输出方式'),
     maxPrompt: Schema.number()
-      .default(30).description('最大提示词数限制，一个逗号计一个'),
-    excessProcessing: Schema.union([
+      .default(30).description('最大提示词数限制，设置为0关闭'),
+    excessHandle: Schema.union([
       '仅提示',
       '从前删除',
       '从后删除'
-    ]).default('删除').description('提示词超限处理'),
+    ]).default('从后删除').description('提示词超限处理'),
     setConfig: Schema.boolean()
       .default(false).description('是否启用指令修改SD全局设置'),
   }).description('其他设置'),
@@ -135,6 +135,6 @@ export const Config: Schema<Config> = Schema.intersect([
     useTranslation: Schema.boolean()
       .default(false).description('是否启用翻译服务处理非英文提示词'),
     maxTasks: Schema.number()
-      .default(3).description('最大任务数限制'),
+      .default(3).description('最大任务数限制，设置为0关闭'),
   }).description('拓展功能'),
 ]);
