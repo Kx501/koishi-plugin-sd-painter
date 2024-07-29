@@ -71,10 +71,10 @@ export async function apply(ctx: Context, config: Config) {
             log.debug('开始获取图片');
 
             const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
-            if (!hasProtocol(initImages)) {
-              initImages = h.select(session.elements, 'img')[0]?.attrs.src;
-              if (initImages === undefined) return '请引用图片消息或检查图片链接';
-            }
+            if (!hasProtocol(initImages)) return '检查图片链接出错';
+          } else {
+            initImages = h.select(session.elements, 'img')[0]?.attrs?.src;
+            if (!initImages) return '请引用图片消息或输入图片链接';
           }
 
 
