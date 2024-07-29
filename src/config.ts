@@ -13,8 +13,8 @@ export interface Config {
   maxSteps: number; // 最大步骤数（指令允许的最大）
   prompt: string; // 正向提示词
   negativePrompt: string; // 负向提示词
-  promptPrepend: boolean; // 正向提示词是否前置
-  negativePromptPrepend: boolean; // 负向提示词是否前置
+  prePrompt: boolean; // 正向提示词是否前置
+  preNegativePrompt: boolean; // 负向提示词是否前置
   restoreFaces: boolean; // 是否使用人脸修复
   hiresFix: boolean; // 是否使用高分辨率修复
   wd14tagger: string; // 图像反推模型
@@ -87,9 +87,9 @@ export const Config: Schema<Config> = Schema.intersect([
       .default('').description('默认正向提示词'),
     negativePrompt: Schema.string().role('textarea', { rows: [3, 8] })
       .default('').description('默认负向提示词'),
-    promptPrepend: Schema.boolean()
+    prePrompt: Schema.boolean()
       .default(true).description('默认正向提示词是否放在最前面'),
-    negativePromptPrepend: Schema.boolean()
+    preNegativePrompt: Schema.boolean()
       .default(true).description('默认负向提示词是否放在最前面'),
     restoreFaces: Schema.boolean()
       .default(false).description('是否启用人脸修复').disabled(),

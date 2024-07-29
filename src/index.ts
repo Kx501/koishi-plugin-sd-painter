@@ -24,7 +24,11 @@ export const usage = `
 // 插件主函数
 export async function apply(ctx: Context, config: Config) {
   // 调试用
-  ctx.on('message-created', (session: Session) => { log.debug(h.select(session.elements, 'img')) }, true)
+  ctx.on('message-created', (session: Session) => {
+    log.debug(JSON.stringify(session.event, null, 2));
+    log.debug(JSON.stringify(session?.quote, null, 2));
+    log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
+  }, true)
 
   const { endpoint, maxTasks } = config;
   let numberOfTasks = 0;
@@ -62,7 +66,7 @@ export async function apply(ctx: Context, config: Config) {
           log.debug('选择子选项:', options);
 
           // 直接从config对象中读取配置
-          const { imageSize, sampler, scheduler, cfgScale, txt2imgSteps, img2imgSteps, maxSteps, prompt, negativePrompt, promptPrepend, negativePromptPrepend, hiresFix, restoreFaces, save } = config;
+          const { imageSize, sampler, scheduler, cfgScale, txt2imgSteps, img2imgSteps, maxSteps, prePrompt, preNegativePrompt, hiresFix, restoreFaces, save } = config;
 
           // 图生图
           let initImages = options?.img2img;
@@ -71,12 +75,13 @@ export async function apply(ctx: Context, config: Config) {
             log.debug('开始获取图片');
 
             const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
-            if (!hasProtocol(initImages)) return '检查图片链接出错';
-          } else {
-            initImages = h.select(session.elements, 'img')[0]?.attrs?.src;
-            if (!initImages) return '请引用图片消息或输入图片链接';
+            if (!hasProtocol(initImages)) {
+              // 只测试了OneBot，不适用于控制台沙盒
+              initImages = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
+              if (!initImages) return '请引用图片消息或输入图片链接'
+            }
+            log.debug('图生图参数处理结果:', initImages);
           }
-
 
           // 用户选项覆盖默认配置
           const steps = options?.steps || (initImages ? img2imgSteps : txt2imgSteps);
@@ -90,31 +95,31 @@ export async function apply(ctx: Context, config: Config) {
 
           log.debug('最终参数:', { steps, cfg, size, samplerName, schedulerName, modelName, vaeName });
 
-          let tempPrompt = _,
-            tempNegativePrompt = options?.negative;
+          // 构建 prompt 和 negativePrompt
+          let tempPrompt = _;
+          let tempNegativePrompt = options?.negative;
 
-          // 构建最终的 prompt 和 negativePrompt
           // 翻译
           tempPrompt = promptHandle(ctx, config, tempPrompt);
+          log.debug('+提示词翻译为:', tempPrompt);
+          tempNegativePrompt = promptHandle(ctx, config, tempNegativePrompt);
+          log.debug('-提示词翻译为:', tempNegativePrompt);
 
-          log.debug('提示词翻译为:', tempPrompt);
-
-          if (tempNegativePrompt !== undefined) {
-            tempNegativePrompt = promptHandle(ctx, config, tempNegativePrompt);
-
-            log.debug('负向提示词翻译为:', tempNegativePrompt);
+          // 确定位置
+          let { prompt, negativePrompt } = config;
+          if (prePrompt) prompt += tempPrompt;
+          else {
+            tempPrompt += prompt;
+            prompt = tempPrompt;
           }
 
+          if (preNegativePrompt) negativePrompt += tempNegativePrompt;
+          else {
+            tempNegativePrompt += negativePrompt;
+            negativePrompt = tempNegativePrompt;
+          };
 
-          let finalPrompt = promptPrepend ? prompt : '';
-          finalPrompt += tempPrompt;
-          finalPrompt += promptPrepend ? '' : prompt;
-
-          let finalNegativePrompt = negativePromptPrepend ? negativePrompt : '';
-          finalNegativePrompt += tempNegativePrompt || '';
-          finalNegativePrompt += negativePromptPrepend ? '' : negativePrompt;
-
-          log.debug('最终提示词:', finalPrompt, '\n负向:', finalNegativePrompt);
+          log.debug('+提示词:', prompt, '\n-提示词:', negativePrompt);
 
           // if (hiresFix && !options?.hiresFix) { }
           // if (restoreFaces && !options?.restoreFaces) { }
@@ -122,8 +127,8 @@ export async function apply(ctx: Context, config: Config) {
 
           // 构建API请求体
           const request = {
-            prompt: finalPrompt,
-            negative_prompt: finalNegativePrompt,
+            prompt: prompt,
+            negative_prompt: negativePrompt,
             seed: seed,
             sampler_name: samplerName,
             scheduler: schedulerName,
@@ -175,9 +180,9 @@ export async function apply(ctx: Context, config: Config) {
 
           if (config.outputMethod === '图片和关键信息') {
             session.send(`步数:${steps}\n尺寸:${size}\n服从度:${cfg}\n采样器:${samplerName}\n调度器:${schedulerName}`);
-            session.send(`正向提示词:\n${finalPrompt}`);
+            session.send(`正向提示词:\n${prompt}`);
             if (options?.negative !== undefined) {
-              session.send(`负向提示词:\n${finalNegativePrompt}`);
+              session.send(`负向提示词:\n${negativePrompt}`);
             }
           } else if (config.outputMethod === '详细信息') {
             session.send(JSON.stringify(request, null, 4))
