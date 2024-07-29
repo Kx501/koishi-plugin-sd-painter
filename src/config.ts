@@ -124,9 +124,9 @@ export const Config: Schema<Config> = Schema.intersect([
     maxPrompt: Schema.number()
       .default(30).description('最大提示词数限制，一个逗号计一个'),
     excessProcessing: Schema.union([
-      '删除',
       '仅提示',
-      '删除并提示'
+      '从前删除',
+      '从后删除'
     ]).default('删除').description('提示词超限处理'),
     setConfig: Schema.boolean()
       .default(false).description('是否启用指令修改SD全局设置'),
