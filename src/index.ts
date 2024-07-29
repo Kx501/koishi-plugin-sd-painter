@@ -239,13 +239,14 @@ export async function apply(ctx: Context, config: Config) {
         try {
           log.debug('调用反推 API');
           // 获取图片
+          log.debug('开始获取图片');
           const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
           if (!hasProtocol(_)) {
-            _ = h.select(session.elements, 'img')[0]?.attrs.src;
-            if (_ === undefined) return '请检查图片链接或引用图片消息';
+            // 只适用于OneBot
+            _ = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
+            if (!_) return '请检查图片链接或引用图片消息';
           }
-
-          log.debug('传入图像:', _);
+          log.debug('图片参数处理结果:', _);
           log.debug('选择子选项:', options);
 
           const request = {
