@@ -94,7 +94,6 @@ export async function apply(ctx: Context, config: Config) {
             tempNegativePrompt = options?.negative;
 
           // 构建最终的 prompt 和 negativePrompt
-
           // 翻译
           tempPrompt = promptHandle(ctx, config, tempPrompt);
 

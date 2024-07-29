@@ -3,9 +3,9 @@ import { } from '@koishijs/translator'
 import { Config, log } from './config';
 
 
-export function promptHandle(ctx: Context, config: Config, text: string, options?: any): string {
+export function promptHandle(ctx: Context, config: Config, text?: string, options?: any): string {
   // 检查输入是否有效
-  if (!text || typeof text !== 'string') return;
+  if (!text || typeof text !== 'string') return text;
 
   // 通用格式化逻辑，格式化传入提示词
   function formatInput(text: string) {
