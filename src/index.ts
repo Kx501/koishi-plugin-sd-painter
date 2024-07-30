@@ -249,7 +249,7 @@ export async function apply(ctx: Context, config: Config) {
     });
 
 
-  // 注册 Interrogateapi 指令
+  // 注册 Endpoint Interrogate 指令
   ctx.command('sd').subcommand('sdtag [imgURL]', '图片生成提示词')
     .option('model', '-m <model_name> 使用的模型')
     .option('threshold', '-t <number> 提示词输出置信度')
@@ -335,6 +335,7 @@ export async function apply(ctx: Context, config: Config) {
     .option('embeddeding', '-e 查询可用的嵌入模型')
     .option('hybridnetwork', '-n 查询可用的超网络模型')
     .option('lora', '-l 查询可用的loras模型')
+    .option('wd', '-w 查询可用的WD模型')
     .action(async ({ session, options }, _1, _2) => {
       log.debug('选择子选项', options)
 
@@ -342,13 +343,14 @@ export async function apply(ctx: Context, config: Config) {
         log.debug('没有选择子选项，退回');
         return '请选择指令的选项！';
       }
+      const sdName = _1;
+      const vaeName = _2;
       const sd = options?.sd;
       const vae = options?.vae;
       const embeddeding = options?.embeddeding;
       const hybridnetwork = options?.hybridnetwork;
       const lora = options?.lora;
-      const sdName = _1;
-      const vaeName = _2;
+      const wd = options?.wd;
 
       try {
         // 查询
@@ -412,7 +414,6 @@ export async function apply(ctx: Context, config: Config) {
 
           const loadedEmbeddings = Object.keys(embeddings.loaded).map(key => `可加载的嵌入: ${key}`).join('\n');
           const skippedEmbeddings = Object.keys(embeddings.skipped).map(key => `不兼容的嵌入: ${key}`).join('\n');
-
           const result = `${loadedEmbeddings}\n\n${skippedEmbeddings}`;
 
           return result || '未找到嵌入模型信息。';
@@ -420,9 +421,7 @@ export async function apply(ctx: Context, config: Config) {
 
         if (hybridnetwork) {
           log.debug('获取超网络模型 API');
-          const response = await ctx.http('get', `${endpoint}/sdapi/v1/hypernetworks`, {
-            headers: header2
-          });
+          const response = await ctx.http('get', `${endpoint}/sdapi/v1/hypernetworks`, { headers: header2 });
           log.debug('API响应状态:', response.statusText);
           const hypernetworks = response.data;
 
@@ -442,11 +441,22 @@ export async function apply(ctx: Context, config: Config) {
 
           const result = loras.map((lora: { filename: string; model_name: string; }) => {
             const fileName = extractFileName(lora.filename);
-            return `名称: ${lora.model_name}\n文件名: ${fileName}`;
+            return `模型名称: ${lora.model_name}\n文件名: ${fileName}`;
           }).join('\n\n');
 
           return result || '未找到Loras信息。';
         }
+
+        if (wd) {
+          log.debug('调用获取WD模型 API');
+          const response = await ctx.http('get', `${endpoint}/tagger/v1/interrogators`, { headers: header2 });
+          log.debug('API响应状态:', response.statusText);
+          const models = response.data.models;
+
+          const result = models.map((modelName: string) => `模型名称: ${modelName}`).join('\n\n');
+          return result || '未找到WD信息。';
+        }
+
 
       } catch (error) {
         log.error('查询模型时出错:', error);
