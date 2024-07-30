@@ -25,18 +25,35 @@ export const usage = `
 export async function apply(ctx: Context, config: Config) {
   // 调试用
   ctx.on('message-created', (session: Session) => {
-    log.debug(JSON.stringify(session.event, null, 2));
-    log.debug(JSON.stringify(session?.quote, null, 2));
+    // log.debug(JSON.stringify(session.event, null, 2));
     log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
   }, true)
 
+
+  ctx.on('command/before-execute', (args) => {
+    log.debug(args);
+    if (numberOfTasks >= maxTasks) {
+      return '任务队列已满';
+    }
+  })
+
+
   const { endpoint, maxTasks } = config;
+  const header1 = {
+    'accept': 'application/json',
+    'Content-Type': 'application/json',
+  };
+  const header2 = {
+    'accept': 'application/json',
+  };
+
   let numberOfTasks = 0;
 
   // 添加任务
   const addTask = () => numberOfTasks++;
   // 移除任务
   const removeTask = () => numberOfTasks--;
+
 
   // 注册 text2img/img2img 指令
   ctx.command('sd [prompt]', 'AI画图')
@@ -58,7 +75,7 @@ export async function apply(ctx: Context, config: Config) {
     .action(async ({ options, session }, _) => {
       if (!maxTasks || numberOfTasks < maxTasks) {
         // 计算耗时
-        let start = performance.now();
+        const start = performance.now();
         addTask();
 
         try {
@@ -126,9 +143,9 @@ export async function apply(ctx: Context, config: Config) {
 
 
           // 构建API请求体
-          const request = {
-            prompt: prompt,
-            negative_prompt: negativePrompt,
+          const payload = {
+            ...(prompt !== '' && { prompt: prompt }),
+            ...(negativePrompt !== '' && { negative_prompt: negativePrompt }),
             seed: seed,
             sampler_name: samplerName,
             scheduler: schedulerName,
@@ -139,14 +156,14 @@ export async function apply(ctx: Context, config: Config) {
             restore_faces: restoreFaces,
             save_images: save,
             override_settings: {
-              ...(modelName && { sd_model_checkpoint: modelName }), // 只有当提供了模型名称时才添加
-              ...(vaeName && { sd_vae: vaeName }),  // 只有当提供了 VAE 名称时才添加
+              ...(modelName && { sd_model_checkpoint: modelName }),
+              ...(vaeName && { sd_vae: vaeName }),
             },
             // override_settings_restore_afterwards: isTemporary,
-            ...(initImages && { init_images: [initImages] }), // 只有当提供了 init_images 时才添加
+            ...(initImages && { init_images: [initImages] }),
           }
 
-          log.debug('API请求体:', request);
+          log.debug('API请求体:', payload);
 
           if (numberOfTasks === 1) {
             session.send(Random.pick([
@@ -164,12 +181,14 @@ export async function apply(ctx: Context, config: Config) {
           if (initImages) {
             // 调用 img2imgAPI
             response = await ctx.http('post', `${endpoint}/sdapi/v1/img2img`, {
-              data: request,
+              headers: header1,
+              data: payload
             });
           } else {
             // 调用 txt2imgAPI
             response = await ctx.http('post', `${endpoint}/sdapi/v1/txt2img`, {
-              data: request,
+              headers: header1,
+              data: payload
             });
           }
 
@@ -185,16 +204,17 @@ export async function apply(ctx: Context, config: Config) {
               session.send(`负向提示词:\n${negativePrompt}`);
             }
           } else if (config.outputMethod === '详细信息') {
-            session.send(JSON.stringify(request, null, 4))
+            session.send(JSON.stringify(payload, null, 4))
           }
 
           removeTask();
-          let end = performance.now();
+          const end = performance.now();
           log.debug(`总耗时: ${end - start} ms`);
           return h.img(imgBuffer, 'image/png');
         } catch (error) {
           log.error('错误:', error);
           removeTask();
+          if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
           return `错误: ${error.message}`;
         }
       } else {
@@ -223,7 +243,7 @@ export async function apply(ctx: Context, config: Config) {
         removeTask();
         return '已终止一个任务';
       } catch (error) {
-        log.error('错误:', error);
+        log.error('错误:', error.detail);
         return `错误: ${error.message}`;
       }
     });
@@ -231,7 +251,8 @@ export async function apply(ctx: Context, config: Config) {
 
   // 注册 Interrogateapi 指令
   ctx.command('sd').subcommand('sdtag [imgURL]', '图片生成提示词')
-    .option('model', '-m <model:string> 使用的模型')
+    .option('model', '-m <model_name> 使用的模型')
+    .option('threshold', '-t <number> 提示词输出置信度')
     .action(async ({ options, session }, _) => {
       if (!maxTasks || numberOfTasks < maxTasks) {
         addTask();
@@ -249,12 +270,13 @@ export async function apply(ctx: Context, config: Config) {
           log.debug('图片参数处理结果:', _);
           log.debug('选择子选项:', options);
 
-          const request = {
+          const payload = {
             image: _,
-            model: options?.model || config?.wd14tagger
+            model: options?.model || config.wd14tagger,
+            threshold: options?.threshold || config.threshold
           };
 
-          log.debug('API请求体:', request);
+          log.debug('API请求体:', payload);
 
           if (numberOfTasks === 1) {
             session.send(Random.pick([
@@ -267,22 +289,31 @@ export async function apply(ctx: Context, config: Config) {
           }
 
           // 调用 Interrogateapi
-          const response = await ctx.http('post', `${endpoint}/sdapi/v1/interrogate`, {
-            data: request,
+          const response = await ctx.http('post', `${endpoint}/tagger/v1/interrogate`, {
+            headers: header1,
+            data: payload
           });
 
+          log.debug('响应结果', response);
           log.debug('API响应状态:', response.statusText);
 
+          const { general, sensitive, questionable, explicit } = response.data.caption;
+
+          const result = Object.keys(response.data.caption).slice(4).join(', ');
+
           removeTask();
-          return `反推结果:\n${response.data.description}`;
+          session.send(`普通度: ${general},
+            \n敏感度: ${sensitive},
+            \n可疑度: ${questionable},
+            \n露骨度: ${explicit}`
+          )
+          return `反推结果:\n${result}`;
         } catch (error) {
           log.error('错误:', error);
           removeTask();
+          if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
           return `错误: ${error.message}`;
         }
-
-
-
       } else {
         session.send(Random.pick([
           '这个任务有点难，我不想接>_<',
@@ -298,7 +329,7 @@ export async function apply(ctx: Context, config: Config) {
 
   // 注册 GetModels 指令
   ctx.command('sd').subcommand('sdmodel [sd_name] [vae_name]', '查询和切换模型')
-    .usage('输入<model_name>为切换模型，缺失时查询模型')
+    .usage('输入模型类别时切换模型，缺失时查询模型')
     .option('sd', '-s 查询/切换SD模型')
     .option('vae', '-v 查询/切换Vae模型')
     .option('embeddeding', '-e 查询可用的嵌入模型')
@@ -309,7 +340,7 @@ export async function apply(ctx: Context, config: Config) {
 
       if (!Object.keys(options).length) {
         log.debug('没有选择子选项，退回');
-        return '请选择指令选项！';
+        return '请选择指令的选项！';
       }
       const sd = options?.sd;
       const vae = options?.vae;
@@ -324,7 +355,7 @@ export async function apply(ctx: Context, config: Config) {
         if ((sd || vae) && !(_1 || _2)) {
           log.debug('调用查询SD模型 API');
           const path = sd ? 'sd-models' : 'sd-vae';
-          const response = await ctx.http('get', `${endpoint}/sdapi/v1/${path}`);
+          const response = await ctx.http('get', `${endpoint}/sdapi/v1/${path}`, { headers: header2 });
           log.debug('API响应状态:', response.statusText);
           const models = response.data;
 
@@ -341,7 +372,7 @@ export async function apply(ctx: Context, config: Config) {
             addTask();
             try {
               log.debug('调用切换模型 API');
-              const request = {
+              const payload = {
                 override_settings: {
                   ...(sdName && { sd_model_checkpoint: _1 }), // 只有当提供了模型名称时才添加
                   ...(vaeName && { sd_vae: _2 }),  // 只有当提供了 VAE 名称时才添加
@@ -352,7 +383,8 @@ export async function apply(ctx: Context, config: Config) {
               session.send('模型切换中...')
 
               const response = await ctx.http('post', `${endpoint}/sdapi/v1/img2img`, {
-                data: request,
+                headers: header1,
+                data: payload
               });
               log.debug('API响应状态:', response.statusText);
 
@@ -374,7 +406,7 @@ export async function apply(ctx: Context, config: Config) {
 
         if (embeddeding) {
           log.debug('调用获取嵌入模型 API');
-          const response = await ctx.http('get', `${endpoint}/sdapi/v1/embeddings`);
+          const response = await ctx.http('get', `${endpoint}/sdapi/v1/embeddings`, { headers: header2 });
           log.debug('API响应状态:', response.statusText);
           const embeddings = response.data;
 
@@ -389,6 +421,7 @@ export async function apply(ctx: Context, config: Config) {
         if (hybridnetwork) {
           log.debug('获取超网络模型 API');
           const response = await ctx.http('get', `${endpoint}/sdapi/v1/hypernetworks`, {
+            headers: header2
           });
           log.debug('API响应状态:', response.statusText);
           const hypernetworks = response.data;
@@ -403,7 +436,7 @@ export async function apply(ctx: Context, config: Config) {
 
         if (lora) {
           log.debug('调用获取Lora模型 API');
-          const response = await ctx.http('get', `${endpoint}/sdapi/v1/loras`);
+          const response = await ctx.http('get', `${endpoint}/sdapi/v1/loras`, { headers: header2 });
           log.debug('API响应状态:', response.statusText);
           const loras = response.data;
 
