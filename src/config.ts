@@ -1,4 +1,5 @@
 import { Schema, Logger } from 'koishi';
+
 export const log = new Logger('sd-webui-api');
 
 export interface Config {
@@ -19,9 +20,11 @@ export interface Config {
   hiresFix: boolean; // 是否使用高分辨率修复
   wd14tagger: string; // 图像反推模型
   threshold: number; // 提示词输出置信度
+  imgCensor: boolean; // 用于图像审核
+  thresholds: number; // 阈值
   outputMethod: string;  // 输出方式
   maxPrompt: number;  //最大提示词数
-  excessHandle: string;  //提示词超限处理方式
+  excessHandle: string;  //提示词超限处理方式{
   setConfig: boolean; // 指令修改SD全局设置
   useTranslation: boolean; // 是否使用翻译服务
   maxTasks: number; // 最大任务数
@@ -63,18 +66,12 @@ export const Config: Schema<Config> = Schema.intersect([
     ]).default('Automatic').description('调度器选择'),
     imageSize: Schema.tuple([Schema.number(), Schema.number()]).default([512, 512]).description(`默认宽度和高度(16的倍数)
   - 模板：
-  - 256x256
-  - 512x512
-  - 512x768
-  - 832x1216
-  - 1024x1024
-  - 1280x720
-  - 1920x1080
+  - 256x256、512x512、512x768、832x1216、1024x1024、1280x720、1920x1080
   `),
-    cfgScale: Schema.number().min(0).default(7).description('引导系数，用于控制图像对提示词服从程度'),
-    txt2imgSteps: Schema.number().min(1).default(20).description('文生图默认采样步数'),
-    img2imgSteps: Schema.number().min(1).default(40).description('图生图默认采样步数'),
-    maxSteps: Schema.number().min(1).default(60).description('最大允许采样步数'),
+    cfgScale: Schema.number().min(0).max(30).step(0.1).default(7).description('引导系数，用于控制图像对提示词服从程度'),
+    txt2imgSteps: Schema.number().min(1).max(150).step(1).default(20).description('文生图默认采样步数'),
+    img2imgSteps: Schema.number().min(1).max(150).step(1).default(40).description('图生图默认采样步数'),
+    maxSteps: Schema.number().min(1).max(150).step(1).default(60).description('最大允许采样步数'),
     prompt: Schema.string().role('textarea', { rows: [3, 8] }).default('').description('默认正向提示词'),
     negativePrompt: Schema.string().role('textarea', { rows: [3, 8] }).default('').description('默认负向提示词'),
     prePrompt: Schema.boolean().default(true).description('默认正向提示词是否放在最前面'),
@@ -99,7 +96,9 @@ export const Config: Schema<Config> = Schema.intersect([
       'wd14-vit-v2',
       'wd14-vit-v2-git',
     ]).default('wd14-vit-v2-git').description('反推模型选择'),
-    threshold: Schema.number().min(0).default(0.3).description('输出提示词的置信度')
+    threshold: Schema.number().min(0).max(1).step(0.1).default(0.3).description('输出提示词的置信度'),
+    imgCensor: Schema.boolean().default(false).description('是否用于审核图片'),
+    thresholds: Schema.number().min(0).max(1).step(0.1).default(0.8).description('判定敏感图阈值')
   }).description('图生词设置'),
   Schema.object({
     outputMethod: Schema.union([
@@ -107,7 +106,7 @@ export const Config: Schema<Config> = Schema.intersect([
       '关键信息',
       '详细信息'
     ]).default('仅图片').description('输出方式'),
-    maxPrompt: Schema.number().min(0).default(30).description('最大提示词数限制，设置为0关闭'),
+    maxPrompt: Schema.number().min(0).default(0).description('最大提示词数限制，设置为0关闭'),
     excessHandle: Schema.union([
       '仅提示',
       '从前删除',

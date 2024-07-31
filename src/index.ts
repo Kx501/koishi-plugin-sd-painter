@@ -18,27 +18,36 @@ export const usage = `
 
 ### 注意事项
 
-1. 子指令可以直接调用
+1. 子指令只能直接调用
 `;
 
 // 插件主函数
 export async function apply(ctx: Context, config: Config) {
   // 调试用
-  ctx.on('message-created', (session: Session) => {
-    // log.debug(JSON.stringify(session.event, null, 2));
-    log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
-  }, true)
+  // ctx.on('message-created', (session: Session) => {
+  //   // log.debug(JSON.stringify(session.event, null, 2));
+  //   log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
+  // }, true)
 
 
   ctx.on('command/before-execute', (args) => {
-    log.debug(args);
+    if (['sd'].includes(args.command.name)) {
+
+    }
     if (numberOfTasks >= maxTasks) {
       return '任务队列已满';
     }
   })
 
+  ctx.on(, () => { })
 
-  const { endpoint, maxTasks } = config;
+
+  // 添加任务
+  const addTask = () => numberOfTasks++;
+  // 移除任务
+  const removeTask = () => numberOfTasks--;
+
+  const { endpoint, imgCensor, maxTasks } = config;
   const header1 = {
     'accept': 'application/json',
     'Content-Type': 'application/json',
@@ -48,11 +57,7 @@ export async function apply(ctx: Context, config: Config) {
   };
 
   let numberOfTasks = 0;
-
-  // 添加任务
-  const addTask = () => numberOfTasks++;
-  // 移除任务
-  const removeTask = () => numberOfTasks--;
+  let censorResult = false;
 
 
   // 注册 text2img/img2img 指令
@@ -76,14 +81,13 @@ export async function apply(ctx: Context, config: Config) {
       if (!maxTasks || numberOfTasks < maxTasks) {
         // 计算耗时
         const start = performance.now();
-        addTask();
 
         try {
           log.debug('调用绘图 API');
           log.debug('选择子选项:', options);
 
-          // 直接从config对象中读取配置
-          const { imageSize, sampler, scheduler, cfgScale, txt2imgSteps, img2imgSteps, maxSteps, prePrompt, preNegativePrompt, hiresFix, restoreFaces, save } = config;
+          // 从config对象中读取配置
+          const { save, imageSize, sampler, scheduler, cfgScale, txt2imgSteps, img2imgSteps, maxSteps, prePrompt, preNegativePrompt, hiresFix, restoreFaces } = config;
 
           // 图生图
           let initImages = options?.img2img;
@@ -150,15 +154,17 @@ export async function apply(ctx: Context, config: Config) {
             sampler_name: samplerName,
             scheduler: schedulerName,
             steps: Math.min(steps, maxSteps),
-            cfg_scale: cfg,
+            ...((prompt !== '' || negativePrompt !== '') && { cfg_scale: cfg }),
             width: size[0],
             height: size[1],
-            restore_faces: restoreFaces,
+            ...(restoreFaces && { restore_faces: true }),
             save_images: save,
-            override_settings: {
-              ...(modelName && { sd_model_checkpoint: modelName }),
-              ...(vaeName && { sd_vae: vaeName }),
-            },
+            ...((modelName || vaeName) && {
+              override_settings: {
+                ...(modelName && { sd_model_checkpoint: modelName }),
+                ...(vaeName && { sd_vae: vaeName }),
+              }
+            }),
             // override_settings_restore_afterwards: isTemporary,
             ...(initImages && { init_images: [initImages] }),
           }
@@ -194,28 +200,36 @@ export async function apply(ctx: Context, config: Config) {
 
           log.debug('API响应状态:', response.statusText);
 
-          // 发送图片缓冲区
-          const imgBuffer = Buffer.from(response.data.images[0], 'base64');
+          let image = response.data.images[0];
 
           if (config.outputMethod === '图片和关键信息') {
             session.send(`步数:${steps}\n尺寸:${size}\n服从度:${cfg}\n采样器:${samplerName}\n调度器:${schedulerName}`);
             session.send(`正向提示词:\n${prompt}`);
-            if (options?.negative !== undefined) {
-              session.send(`负向提示词:\n${negativePrompt}`);
-            }
+            if (options?.negative !== undefined) session.send(`负向提示词:\n${negativePrompt}`);
           } else if (config.outputMethod === '详细信息') {
             session.send(JSON.stringify(payload, null, 4))
           }
 
-          removeTask();
           const end = performance.now();
           log.debug(`总耗时: ${end - start} ms`);
-          return h.img(imgBuffer, 'image/png');
+
+          if (imgCensor) {
+            // log.debug('传入审核:', image);
+            session.send('进入审核阶段...')
+            await session.execute(`sdtag '${image}'`);
+            log.debug('审核评分', censorResult);
+            if (censorResult) {
+              log.debug('图片被标记为不适合');
+              return '图片违规';
+            }
+          }
+
+          image = Buffer.from(response.data.images[0], 'base64');
+          return h.img(image, 'image/png');
         } catch (error) {
-          log.error('错误:', error);
-          removeTask();
+          log.error('生成图片出错:', error);
           if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
-          return `错误: ${error.message}`;
+          return `生成图片出错: ${error.message}`;
         }
       } else {
         // 超过最大任务数的处理逻辑
@@ -240,7 +254,6 @@ export async function apply(ctx: Context, config: Config) {
 
         log.debug('API响应数据:', response);
 
-        removeTask();
         return '已终止一个任务';
       } catch (error) {
         log.error('错误:', error.detail);
@@ -255,19 +268,20 @@ export async function apply(ctx: Context, config: Config) {
     .option('threshold', '-t <number> 提示词输出置信度')
     .action(async ({ options, session }, _) => {
       if (!maxTasks || numberOfTasks < maxTasks) {
-        addTask();
-
         try {
           log.debug('调用反推 API');
+
           // 获取图片
           log.debug('开始获取图片');
-          const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
-          if (!hasProtocol(_)) {
-            // 只适用于OneBot
-            _ = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
-            if (!_) return '请检查图片链接或引用图片消息';
+          if (!imgCensor) {
+            const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
+            if (!hasProtocol(_)) {
+              // 只适用于OneBot
+              _ = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
+              if (!_) return '请检查图片链接或引用图片消息';
+            }
           }
-          log.debug('图片参数处理结果:', _);
+          // log.debug('获取图片参数:', _);
           log.debug('选择子选项:', options);
 
           const payload = {
@@ -278,14 +292,16 @@ export async function apply(ctx: Context, config: Config) {
 
           log.debug('API请求体:', payload);
 
-          if (numberOfTasks === 1) {
-            session.send(Random.pick([
-              '开始反推提示词...',
-              '在推了在推了...让我仔细想想...',
-              '我在想想想了...',
-            ]))
-          } else {
-            session.send(`在推了在推了，不过前面还有 ${numberOfTasks} 个任务……`)
+          if (!imgCensor) {
+            if (numberOfTasks === 1) {
+              session.send(Random.pick([
+                '开始反推提示词...',
+                '在推了在推了...让我仔细想想...',
+                '我在想想想了...',
+              ]))
+            } else {
+              session.send(`在推了在推了，不过前面还有 ${numberOfTasks} 个任务……`)
+            }
           }
 
           // 调用 Interrogateapi
@@ -301,18 +317,23 @@ export async function apply(ctx: Context, config: Config) {
 
           const result = Object.keys(response.data.caption).slice(4).join(', ');
 
-          removeTask();
-          session.send(`普通度: ${general},
-            \n敏感度: ${sensitive},
-            \n可疑度: ${questionable},
-            \n露骨度: ${explicit}`
-          )
-          return `反推结果:\n${result}`;
+          if (imgCensor) {
+            const thresholds = config.thresholds;
+            if (Math.max(questionable, sensitive, explicit) > thresholds) censorResult = true;
+            else censorResult = false;
+          } else {
+            session.send(`普通度: ${general},
+              \n敏感度: ${sensitive},
+              \n可疑度: ${questionable},
+              \n露骨度: ${explicit}`
+            );
+            return `反推结果:\n${result}`;
+          }
         } catch (error) {
-          log.error('错误:', error);
-          removeTask();
+          log.error('反推出错:', error);
           if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
-          return `错误: ${error.message}`;
+          return `反推出错: ${error.message}`;
+
         }
       } else {
         session.send(Random.pick([
@@ -324,12 +345,9 @@ export async function apply(ctx: Context, config: Config) {
     });
 
 
-  // 提取路径最后一段
-  const extractFileName = (path: string) => path.split('\\').pop();
-
   // 注册 GetModels 指令
   ctx.command('sd').subcommand('sdmodel [sd_name] [vae_name]', '查询和切换模型')
-    .usage('输入模型类别时切换模型，缺失时查询模型')
+    .usage('输入名称时为切换模型，缺失时为查询模型')
     .option('sd', '-s 查询/切换SD模型')
     .option('vae', '-v 查询/切换Vae模型')
     .option('embeddeding', '-e 查询可用的嵌入模型')
@@ -352,6 +370,9 @@ export async function apply(ctx: Context, config: Config) {
       const lora = options?.lora;
       const wd = options?.wd;
 
+      // 提取路径最后一段
+      const extractFileName = (path: string) => path.split('\\').pop();
+
       try {
         // 查询
         if ((sd || vae) && !(_1 || _2)) {
@@ -371,13 +392,12 @@ export async function apply(ctx: Context, config: Config) {
         // 切换
         else if (!maxTasks || numberOfTasks < maxTasks) {
           if ((_1 || _2) && (sd || vae)) {
-            addTask();
             try {
               log.debug('调用切换模型 API');
               const payload = {
                 override_settings: {
-                  ...(sdName && { sd_model_checkpoint: _1 }), // 只有当提供了模型名称时才添加
-                  ...(vaeName && { sd_vae: _2 }),  // 只有当提供了 VAE 名称时才添加
+                  ...(sdName && { sd_model_checkpoint: _1 }),
+                  ...(vaeName && { sd_vae: _2 }),
                 },
                 override_settings_restore_afterwards: false,
               }
@@ -390,11 +410,9 @@ export async function apply(ctx: Context, config: Config) {
               });
               log.debug('API响应状态:', response.statusText);
 
-              removeTask();
               return '模型更换成功'
             } catch (error) {
               log.error('切换模型时出错:', error);
-              removeTask();
               return `切换模型时出错: ${error.message}`;
             }
           }
