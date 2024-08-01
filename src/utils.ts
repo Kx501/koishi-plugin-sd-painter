@@ -3,7 +3,7 @@ import { } from '@koishijs/translator'
 import { Config, log } from './config';
 
 
-export function promptHandle(ctx: Context, config: Config, text?: string, options?: any): string {
+export function promptHandle(ctx: Context, config: Config, text?: string, trans?: boolean, options?: any): string {
   // 检查输入是否有效
   if (!text || typeof text !== 'string') return '';
 
@@ -48,7 +48,7 @@ export function promptHandle(ctx: Context, config: Config, text?: string, option
 
 
   // 函数功能实现
-  const { maxPrompt, excessHandle, useTranslation } = config;
+  const { maxPrompt, excessHandle } = config;
 
   const exceedingPart = text.length - maxPrompt;
   if (!maxPrompt || exceedingPart > 0 && excessHandle === '仅提示') {
@@ -63,7 +63,7 @@ export function promptHandle(ctx: Context, config: Config, text?: string, option
 
   // 进入翻译环节
   // 检查开关
-  if (!useTranslation) return text;
+  if (!trans) return text;
   else if (!ctx.translator) return '请先安装translator服务';
   else translateZH(ctx, text);
 }

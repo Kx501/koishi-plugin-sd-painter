@@ -11,14 +11,13 @@ export * from './config'
 
 export const usage = `
 ### 插件功能列表
-
 * 功能 1：文/图生图
 * 功能 2：提示词反推
 * 功能 3：查询/切换模型
 
 ### 注意事项
-
 1. 子指令只能直接调用
+2. 默认使用的是秋葉整合包
 `;
 
 // 插件主函数
@@ -29,25 +28,8 @@ export async function apply(ctx: Context, config: Config) {
   //   log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
   // }, true)
 
-
-  ctx.on('command/before-execute', (args) => {
-    if (['sd'].includes(args.command.name)) {
-
-    }
-    if (numberOfTasks >= maxTasks) {
-      return '任务队列已满';
-    }
-  })
-
-  ctx.on(, () => { })
-
-
-  // 添加任务
-  const addTask = () => numberOfTasks++;
-  // 移除任务
-  const removeTask = () => numberOfTasks--;
-
-  const { endpoint, imgCensor, maxTasks } = config;
+  const { endpoint, useTranslation, outputMethod, maxTasks } = config;
+  const imgCensor = config.WD.imgCensor;
   const header1 = {
     'accept': 'application/json',
     'Content-Type': 'application/json',
@@ -56,7 +38,7 @@ export async function apply(ctx: Context, config: Config) {
     'accept': 'application/json',
   };
 
-  let numberOfTasks = 0;
+  let taskNum = 0;
   let censorResult = false;
 
 
@@ -78,159 +60,205 @@ export async function apply(ctx: Context, config: Config) {
     .option('model', '-m <model_name> 单次切换SD模型')
     .option('vae', '-v <vae_name> 单次切换Vae模型')
     .action(async ({ options, session }, _) => {
-      if (!maxTasks || numberOfTasks < maxTasks) {
-        // 计算耗时
-        const start = performance.now();
+      if (!maxTasks || taskNum < maxTasks) {
+        log.debug('调用绘图 API');
+        log.debug('选择子选项:', options);
 
-        try {
-          log.debug('调用绘图 API');
-          log.debug('选择子选项:', options);
+        // 从config对象中读取配置
+        const { save, imgSize, sampler, scheduler, cfgScale, txt2imgSteps, img2imgSteps, maxSteps, prePrompt, preNegPrompt, hiresFix, restoreFaces } = config.IMG;
 
-          // 从config对象中读取配置
-          const { save, imageSize, sampler, scheduler, cfgScale, txt2imgSteps, img2imgSteps, maxSteps, prePrompt, preNegativePrompt, hiresFix, restoreFaces } = config;
-
-          // 图生图
-          let initImages = options?.img2img;
-
-          if (options.hasOwnProperty('img2img')) {
-            log.debug('开始获取图片');
-
-            const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
-            if (!hasProtocol(initImages)) {
-              // 只测试了OneBot，不适用于控制台沙盒
-              initImages = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
-              if (!initImages) return '请检查图片链接或引用图片消息'
-            }
-            log.debug('图生图参数处理结果:', initImages);
+        // 图生图
+        let initImages = options?.img2img;
+        if (options.hasOwnProperty('img2img')) {
+          log.debug('开始获取图片');
+          const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
+          if (!hasProtocol(initImages)) {
+            // 只测试了OneBot，不适用于控制台沙盒
+            initImages = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
+            if (!initImages) return '请检查图片链接或引用图片消息'
           }
-
-          // 用户选项覆盖默认配置
-          const steps = options?.steps || (initImages ? img2imgSteps : txt2imgSteps);
-          const cfg = options?.cfgScale || cfgScale;
-          const size = options?.size ? options?.size.split('x').map(Number) : imageSize;
-          const seed = options?.seed || -1;
-          const samplerName = options?.sampler || sampler;
-          const schedulerName = options?.scheduler || scheduler;
-          const modelName = options?.model;
-          const vaeName = options?.vae;
-
-          log.debug('最终参数:', { steps, cfg, size, samplerName, schedulerName, modelName, vaeName });
-
-          // 构建 prompt 和 negativePrompt
-          let tempPrompt = _;
-          let tempNegativePrompt = options?.negative;
-
-          // 翻译
-          tempPrompt = promptHandle(ctx, config, tempPrompt);
-          log.debug('+提示词翻译为:', tempPrompt);
-          tempNegativePrompt = promptHandle(ctx, config, tempNegativePrompt);
-          log.debug('-提示词翻译为:', tempNegativePrompt);
-
-          // 确定位置
-          let { prompt, negativePrompt } = config;
-          if (prePrompt) prompt += tempPrompt;
-          else {
-            tempPrompt += prompt;
-            prompt = tempPrompt;
-          }
-
-          if (preNegativePrompt) negativePrompt += tempNegativePrompt;
-          else {
-            tempNegativePrompt += negativePrompt;
-            negativePrompt = tempNegativePrompt;
-          };
-
-          log.debug('+提示词:', prompt, '\n-提示词:', negativePrompt);
-
-          // if (hiresFix && !options?.hiresFix) { }
-          // if (restoreFaces && !options?.restoreFaces) { }
-
-
-          // 构建API请求体
-          const payload = {
-            ...(prompt !== '' && { prompt: prompt }),
-            ...(negativePrompt !== '' && { negative_prompt: negativePrompt }),
-            seed: seed,
-            sampler_name: samplerName,
-            scheduler: schedulerName,
-            steps: Math.min(steps, maxSteps),
-            ...((prompt !== '' || negativePrompt !== '') && { cfg_scale: cfg }),
-            width: size[0],
-            height: size[1],
-            ...(restoreFaces && { restore_faces: true }),
-            save_images: save,
-            ...((modelName || vaeName) && {
-              override_settings: {
-                ...(modelName && { sd_model_checkpoint: modelName }),
-                ...(vaeName && { sd_vae: vaeName }),
-              }
-            }),
-            // override_settings_restore_afterwards: isTemporary,
-            ...(initImages && { init_images: [initImages] }),
-          }
-
-          log.debug('API请求体:', payload);
-
-          if (numberOfTasks === 1) {
-            session.send(Random.pick([
-              '在画了在画了',
-              '你就在此地不要走动，等我给你画一幅',
-              '少女绘画中……',
-              '正在创作中，请稍等片刻',
-              '笔墨已备好，画卷即将展开'
-            ]))
-          } else {
-            session.send(`在画了在画了，不过前面还有 ${numberOfTasks} 个任务……`)
-          }
-
-          let response: HTTP.Response<any>;
-          if (initImages) {
-            // 调用 img2imgAPI
-            response = await ctx.http('post', `${endpoint}/sdapi/v1/img2img`, {
-              headers: header1,
-              data: payload
-            });
-          } else {
-            // 调用 txt2imgAPI
-            response = await ctx.http('post', `${endpoint}/sdapi/v1/txt2img`, {
-              headers: header1,
-              data: payload
-            });
-          }
-
-          log.debug('API响应状态:', response.statusText);
-
-          let image = response.data.images[0];
-
-          if (config.outputMethod === '图片和关键信息') {
-            session.send(`步数:${steps}\n尺寸:${size}\n服从度:${cfg}\n采样器:${samplerName}\n调度器:${schedulerName}`);
-            session.send(`正向提示词:\n${prompt}`);
-            if (options?.negative !== undefined) session.send(`负向提示词:\n${negativePrompt}`);
-          } else if (config.outputMethod === '详细信息') {
-            session.send(JSON.stringify(payload, null, 4))
-          }
-
-          const end = performance.now();
-          log.debug(`总耗时: ${end - start} ms`);
-
-          if (imgCensor) {
-            // log.debug('传入审核:', image);
-            session.send('进入审核阶段...')
-            await session.execute(`sdtag '${image}'`);
-            log.debug('审核评分', censorResult);
-            if (censorResult) {
-              log.debug('图片被标记为不适合');
-              return '图片违规';
-            }
-          }
-
-          image = Buffer.from(response.data.images[0], 'base64');
-          return h.img(image, 'image/png');
-        } catch (error) {
-          log.error('生成图片出错:', error);
-          if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
-          return `生成图片出错: ${error.message}`;
+          log.debug('图生图参数处理结果:', initImages);
         }
+
+        // 用户选项覆盖默认配置
+        const steps = options?.steps || (initImages ? img2imgSteps : txt2imgSteps);
+        const cfg = options?.cfgScale || cfgScale;
+        const size = options?.size ? options?.size.split('x').map(Number) : imgSize;
+        const seed = options?.seed || -1;
+        const smpName = options?.sampler || sampler;
+        const schName = options?.scheduler || scheduler;
+        const noPosTags = options?.noPositiveTags;
+        const noNegTags = options?.noNegativeTags;
+        const Tans = options?.noTranslate || useTranslation;
+        const modelName = options?.model;
+        const vaeName = options?.vae;
+        log.debug('最终参数:', { steps, cfg, size, smpName, schName, modelName, vaeName });
+
+        // 构建 prompt 和 negativePrompt
+        let tmpPrompt = _;
+        let tmpNegPrompt = options?.negative;
+        // 翻译
+        tmpPrompt = promptHandle(ctx, config, tmpPrompt, Tans);
+        log.debug('+提示词翻译为:', tmpPrompt);
+        tmpNegPrompt = promptHandle(ctx, config, tmpNegPrompt, Tans);
+        log.debug('-提示词翻译为:', tmpNegPrompt);
+        // 确定位置
+        let { prompt, negativePrompt } = config.IMG;
+        if (!noPosTags) if (prePrompt) {
+          prompt += tmpPrompt;
+          tmpPrompt = prompt;
+        }
+        else tmpPrompt += prompt;
+
+        if (!noNegTags) if (preNegPrompt) {
+          negativePrompt += tmpNegPrompt;
+          tmpNegPrompt = negativePrompt;
+        }
+        else tmpNegPrompt += negativePrompt;
+        log.debug('+提示词:', prompt, '\n-提示词:', negativePrompt);
+
+        // if (hiresFix && !options?.hiresFix) { }
+        // if (restoreFaces && !options?.restoreFaces) { }
+
+
+        // 构建API请求体
+        const payload = {
+          ...(prompt !== '' && { prompt: tmpPrompt }),
+          ...(negativePrompt !== '' && { negative_prompt: tmpNegPrompt }),
+          seed: seed,
+          sampler_name: smpName,
+          scheduler: schName,
+          steps: Math.min(steps, maxSteps),
+          ...((prompt !== '' || negativePrompt !== '') && { cfg_scale: cfg }),
+          width: size[0],
+          height: size[1],
+          ...(restoreFaces && { restore_faces: true }),
+          save_images: save,
+          ...((modelName || vaeName) && {
+            override_settings: {
+              ...(modelName && { sd_model_checkpoint: modelName }),
+              ...(vaeName && { sd_vae: vaeName }),
+            }
+          }),
+          // override_settings_restore_afterwards: isTemporary,
+          ...(initImages && { init_images: [initImages] }),
+        }
+
+        const pyload2 = {
+          ADetailer: {
+            args: [
+              true,
+              false,
+              {
+                ad_model: "face_yolov8n.pt",
+                // ad_model_classes: "",
+                // ad_tab_enable: true,
+                ad_prompt: "",
+                ad_negative_prompt: "",
+                ad_confidence: 0.3,
+                // ad_mask_k_largest: 0,
+                // ad_mask_min_ratio: 0.0,
+                // ad_mask_max_ratio: 1.0,
+                ad_dilate_erode: 32,
+                ad_x_offset: 0,
+                ad_y_offset: 0,
+                ad_mask_merge_invert: "None",
+                ad_mask_blur: 4,
+                ad_denoising_strength: 0.4,
+                ad_inpaint_only_masked: true,
+                ad_inpaint_only_masked_padding: 0,
+                ad_use_inpaint_width_height: false,
+                ad_inpaint_width: 512,
+                ad_inpaint_height: 512,
+                ad_use_steps: true,
+                ad_steps: 28,
+                ad_use_cfg_scale: false,
+                ad_cfg_scale: 7.0,
+                ad_use_checkpoint: false,
+                ad_checkpoint: "Use same checkpoint",
+                ad_use_vae: false,
+                ad_vae: "Use same VAE",
+                ad_use_sampler: false,
+                ad_sampler: "DPM++ 2M Karras",
+                ad_use_noise_multiplier: false,
+                ad_noise_multiplier: 1.0,
+                ad_use_clip_skip: false,
+                ad_clip_skip: 1,
+                ad_restore_face: false,
+                ad_controlnet_model: "None",
+                ad_controlnet_module: "None",
+                ad_controlnet_weight: 1.0,
+                ad_controlnet_guidance_start: 0.0,
+                ad_controlnet_guidance_end: 1.0
+              }
+            ]
+          }
+        }
+
+        log.debug('API请求体:', payload);
+
+        if (taskNum === 0) {
+          session.send(Random.pick([
+            '在画了在画了',
+            '你就在此地不要走动，等我给你画一幅',
+            '少女绘画中……',
+            '正在创作中，请稍等片刻',
+            '笔墨已备好，画卷即将展开'
+          ]))
+        } else {
+          session.send(`在画了在画了，不过前面还有 ${taskNum} 个任务……`)
+        }
+
+        async function process() {
+          try {
+            let response: HTTP.Response<any>;
+            if (initImages) {
+              // 调用 img2imgAPI
+              response = await ctx.http('post', `${endpoint}/sdapi/v1/img2img`, {
+                headers: header1,
+                data: payload
+              });
+            } else {
+              // 调用 txt2imgAPI
+              response = await ctx.http('post', `${endpoint}/sdapi/v1/txt2img`, {
+                headers: header1,
+                data: payload
+              });
+            }
+            log.debug('API响应状态:', response.statusText);
+            let image = response.data.images[0];
+
+            if (outputMethod === '关键信息') {
+              session.send(`步数:${steps}\n尺寸:${size}\n服从度:${cfg}\n采样器:${smpName}\n调度器:${schName}`);
+              session.send(`正向提示词:\n${prompt}`);
+              if (options?.negative !== undefined) session.send(`负向提示词:\n${negativePrompt}`);
+            } else if (outputMethod === '详细信息') {
+              session.send(JSON.stringify(payload, null, 4))
+            }
+
+            if (imgCensor) {
+              // log.debug('传入审核:', image);
+              session.send('进入审核阶段...')
+              await session.execute(`sdtag '${image}'`);
+              log.debug('审核评分', censorResult);
+              if (censorResult) {
+                log.debug('图片被标记为不适合');
+                session.send('图片违规');
+                if (outputMethod !== '详细信息') return;
+              }
+            }
+            image = Buffer.from(response.data.images[0], 'base64');
+            return h.img(image, 'image/png');
+          } catch (error) {
+            log.error('生成图片出错:', error);
+            if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
+            return `生成图片出错: ${error.message}`;
+          }
+        }
+
+        taskNum++;
+        session.send(await process());
+        taskNum--;
       } else {
         // 超过最大任务数的处理逻辑
         session.send(Random.pick([
@@ -254,6 +282,7 @@ export async function apply(ctx: Context, config: Config) {
 
         log.debug('API响应数据:', response);
 
+        taskNum--;
         return '已终止一个任务';
       } catch (error) {
         log.error('错误:', error.detail);
@@ -267,74 +296,77 @@ export async function apply(ctx: Context, config: Config) {
     .option('model', '-m <model_name> 使用的模型')
     .option('threshold', '-t <number> 提示词输出置信度')
     .action(async ({ options, session }, _) => {
-      if (!maxTasks || numberOfTasks < maxTasks) {
-        try {
-          log.debug('调用反推 API');
+      if (!maxTasks || taskNum < maxTasks) {
+        log.debug('调用反推 API');
+        log.debug('选择子选项:', options);
 
-          // 获取图片
-          log.debug('开始获取图片');
-          if (!imgCensor) {
-            const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
-            if (!hasProtocol(_)) {
-              // 只适用于OneBot
-              _ = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
-              if (!_) return '请检查图片链接或引用图片消息';
-            }
+        // 获取图片
+        log.debug('开始获取图片');
+        if (!imgCensor) {
+          const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
+          if (!hasProtocol(_)) {
+            // 只适用于OneBot
+            _ = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
+            if (!_) return '请检查图片链接或引用图片消息';
           }
-          // log.debug('获取图片参数:', _);
-          log.debug('选择子选项:', options);
-
-          const payload = {
-            image: _,
-            model: options?.model || config.wd14tagger,
-            threshold: options?.threshold || config.threshold
-          };
-
-          log.debug('API请求体:', payload);
-
-          if (!imgCensor) {
-            if (numberOfTasks === 1) {
-              session.send(Random.pick([
-                '开始反推提示词...',
-                '在推了在推了...让我仔细想想...',
-                '我在想想想了...',
-              ]))
-            } else {
-              session.send(`在推了在推了，不过前面还有 ${numberOfTasks} 个任务……`)
-            }
-          }
-
-          // 调用 Interrogateapi
-          const response = await ctx.http('post', `${endpoint}/tagger/v1/interrogate`, {
-            headers: header1,
-            data: payload
-          });
-
-          log.debug('响应结果', response);
-          log.debug('API响应状态:', response.statusText);
-
-          const { general, sensitive, questionable, explicit } = response.data.caption;
-
-          const result = Object.keys(response.data.caption).slice(4).join(', ');
-
-          if (imgCensor) {
-            const thresholds = config.thresholds;
-            if (Math.max(questionable, sensitive, explicit) > thresholds) censorResult = true;
-            else censorResult = false;
-          } else {
-            session.send(`普通度: ${general},
-              \n敏感度: ${sensitive},
-              \n可疑度: ${questionable},
-              \n露骨度: ${explicit}`
-            );
-            return `反推结果:\n${result}`;
-          }
-        } catch (error) {
-          log.error('反推出错:', error);
-          if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
-          return `反推出错: ${error.message}`;
-
         }
+        // log.debug('获取图片参数:', _);
+
+        const { tagger, threshold, score } = config.WD
+
+        const payload = {
+          image: _,
+          model: options?.model || tagger,
+          threshold: imgCensor ? 1 : (options?.threshold || threshold)
+        };
+        log.debug('API请求体:', payload);
+
+        if (!imgCensor) {
+          if (taskNum === 1) {
+            session.send(Random.pick([
+              '开始反推提示词...',
+              '在推了在推了...让我仔细想想...',
+              '我在想想想了...',
+            ]))
+          } else {
+            session.send(`在推了在推了，不过前面还有 ${taskNum} 个任务……`)
+          }
+        }
+
+        async function process() {
+          try {
+            // 调用 Interrogateapi
+            const response = await ctx.http('post', `${endpoint}/tagger/v1/interrogate`, {
+              headers: header1,
+              data: payload
+            });
+            log.debug('响应结果', response);
+            log.debug('API响应状态:', response.statusText);
+            const { general, sensitive, questionable, explicit } = response.data.caption;
+            const result = Object.keys(response.data.caption).slice(4).join(', ');
+
+            const toFixed2 = (num: number) => parseFloat(num.toFixed(4));
+            const [gen, sen, que, exp] = [general, sensitive, questionable, explicit].map(toFixed2);
+
+            if (imgCensor) {
+              if (Math.max(que, sen, exp) > score) censorResult = true;
+              else censorResult = false;
+            }
+            if (!imgCensor || (outputMethod === '关键信息' || outputMethod === '详细信息')) {
+              session.send(`普通度: ${gen}\n敏感度: ${sen}\n可疑度: ${que}\n露骨度: ${exp}`);
+            }
+
+            if (!imgCensor) return `反推结果:\n${result}`;
+          } catch (error) {
+            log.error('反推出错:', error);
+            if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
+            return `反推出错: ${error.message}`;
+          }
+        }
+
+        taskNum++;
+        session.send(await process());
+        taskNum--;
       } else {
         session.send(Random.pick([
           '这个任务有点难，我不想接>_<',
@@ -390,36 +422,41 @@ export async function apply(ctx: Context, config: Config) {
           return result || `未找到可用的${sd ? 'SD' : 'SD VAE'}模型。`;
         }
         // 切换
-        else if (!maxTasks || numberOfTasks < maxTasks) {
+        else if (!maxTasks || taskNum < maxTasks) {
           if ((_1 || _2) && (sd || vae)) {
-            try {
-              log.debug('调用切换模型 API');
-              const payload = {
-                override_settings: {
-                  ...(sdName && { sd_model_checkpoint: _1 }),
-                  ...(vaeName && { sd_vae: _2 }),
-                },
-                override_settings_restore_afterwards: false,
+            async function process() {
+              try {
+                log.debug('调用切换模型 API');
+                const payload = {
+                  override_settings: {
+                    ...(sdName && { sd_model_checkpoint: _1 }),
+                    ...(vaeName && { sd_vae: _2 }),
+                  },
+                  override_settings_restore_afterwards: false,
+                }
+
+                session.send('模型切换中...')
+
+                const response = await ctx.http('post', `${endpoint}/sdapi/v1/img2img`, {
+                  headers: header1,
+                  data: payload
+                });
+                log.debug('API响应状态:', response.statusText);
+
+                return '模型更换成功'
+              } catch (error) {
+                log.error('切换模型时出错:', error);
+                return `切换模型时出错: ${error.message}`;
               }
-
-              session.send('模型切换中...')
-
-              const response = await ctx.http('post', `${endpoint}/sdapi/v1/img2img`, {
-                headers: header1,
-                data: payload
-              });
-              log.debug('API响应状态:', response.statusText);
-
-              return '模型更换成功'
-            } catch (error) {
-              log.error('切换模型时出错:', error);
-              return `切换模型时出错: ${error.message}`;
             }
+
+            session.send(await process());
+            taskNum--;
           }
         } else {
           session.send(Random.pick([
             '忙不过来了，走开走开！',
-            '你怎么这么多事，（恼',
+            '你怎么这么多要求，（晕',
             '要被玩坏啦！'
           ]));
         }
@@ -490,28 +527,34 @@ export async function apply(ctx: Context, config: Config) {
   })
     .action(async ({ session }, configData) => {
       if (config.setConfig) {
-        if (numberOfTasks === 0) {
-          try {
-            log.debug('调用修改设置 API');
-            const response = await ctx.http('post', `${endpoint}/sdapi/v1/options`, {
-              data: JSON.parse(configData),
-              headers: { 'Content-Type': 'application/json' },
-            });
-            log.debug('API响应状态:', response.statusText);
+        if (taskNum === 0) {
+          async function process() {
+            try {
+              log.debug('调用修改设置 API');
+              const response = await ctx.http('post', `${endpoint}/sdapi/v1/options`, {
+                data: JSON.parse(configData),
+                headers: { 'Content-Type': 'application/json' },
+              });
+              log.debug('API响应状态:', response.statusText);
 
-            return '配置已成功设置。';
-          } catch (error) {
-            log.error('设置全局配置时出错:', error);
-            if (error.response?.status === 422) {
-              return '配置数据验证错误，请检查提供的数据格式。';
+              return '配置已成功设置。';
+            } catch (error) {
+              log.error('设置全局配置时出错:', error);
+              if (error.response?.status === 422) {
+                return '配置数据验证错误，请检查提供的数据格式。';
+              }
+              return `设置配置时出错: ${error.message}`;
             }
-            return `设置配置时出错: ${error.message}`;
           }
+
+          taskNum++;
+          session.send(await process());
+          taskNum--;
         } else {
-          session.send('当前有任务在进行，请等待所有任务完成')
+          session.send('当前有任务在进行，请等待所有任务完成');
         }
       } else {
-        session.send('管理员未启用该设置')
+        session.send('管理员未启用该设置');
       }
     });
 
