@@ -22,8 +22,7 @@ export interface Config {
   };
   AD: {
     enable: boolean; // 默认开启
-    model: string; // 模型选项
-    customModel: string;  // 自定义模型
+    model: any; // 模型选项
     prompt: string; // 正向提示词
     negativePrompt: string; // 负向提示词
     confidence: number; // 检测置信度
@@ -32,6 +31,7 @@ export interface Config {
     tagger: string; // 图像反推模型
     threshold: number; // 提示词输出置信度
     imgCensor: boolean; // 用于图像审核
+    indicators: string[]; // 评估指标
     score: number; // 阈值
   };
   outputMethod: string;  // 输出方式
@@ -98,21 +98,25 @@ export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
     AD: Schema.object({
       enable: Schema.boolean().default(false).description('使用ADetailer修复'),
-      model: Schema.union([
-        'face_yolov8n.pt',
-        'face_yolov8s.pt',
-        'hand_yolov8n.pt',
-        'person_yolov8n-seg.pt',
-        'person_yolov8s-seg.pt',
-        'yolov8x-worldv2.pt',
-        'mediapipe_face_full',
-        'mediapipe_face_short',
-        'mediapipe_face_mesh',
-        'mediapipe face mesh eyes only',
-      ]).description('预设模型选择'),
-      customModel: Schema.string().description('使用自定义模型'),
-      prompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认正向提示词'),
-      negativePrompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认负向提示词'),
+      model: Schema.array(
+        Schema.union([
+          'face_yolov8n.pt',
+          'face_yolov8s.pt',
+          'hand_yolov8n.pt',
+          'person_yolov8n-seg.pt',
+          'person_yolov8s-seg.pt',
+          'yolov8x-worldv2.pt',
+          'mediapipe_face_full',
+          'mediapipe_face_short',
+          'mediapipe_face_mesh',
+          'mediapipe face mesh eyes only',
+          Schema.object({
+            custom: Schema.string().description('填写模型名称'),
+          }).description('自定义模型'),
+        ]).description('预设模型选择'),
+      ),
+      prompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认正向提示词，指令传入参数时覆盖此处'),
+      negativePrompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认负向提示词，指令传入参数时覆盖此处'),
       confidence: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.3).description('识别对象的置信度'),
     }).collapse(),
   }).description('修复设置'),
@@ -136,6 +140,7 @@ export const Config: Schema<Config> = Schema.intersect([
       ]).default('wd14-vit-v2-git').description('反推模型选择'),
       threshold: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.3).description('输出提示词的置信度'),
       imgCensor: Schema.boolean().default(false).description('是否用于审核图片'),
+      indicators: Schema.array(Schema.union(['sensitive', 'questionable', 'explicit'])).default(['sensitive', 'questionable', 'explicit']).description('选择评估指标').role('checkbox'),
       score: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.8).description('判定敏感图阈值')
     }).collapse(),
   }).description('图生词设置'),

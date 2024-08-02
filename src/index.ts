@@ -43,11 +43,11 @@ export async function apply(ctx: Context, config: Config) {
 
 
   // 注册 text2img/img2img 指令
-  ctx.command('sd [prompt]', 'AI画图')
+  ctx.command('sd [tags]', 'AI画图')
     .option('negative', '-n <tags> 负向提示词，如果有空格首尾用引号括起来')
     .option('img2img', '-i [imgURL] 图生图，@图片或输入链接')
     .option('steps', '-s <number> 采样步数')
-    .option('cfgScale', '-c <number> 提示词服从度')
+    .option('cfgScale', '-c <float> 提示词服从度')
     .option('size', '-si <宽x高> 图像尺寸')
     .option('seed', '-se <number> 随机种子')
     .option('sampler', '-sa <name> 采样器')
@@ -59,6 +59,10 @@ export async function apply(ctx: Context, config: Config) {
     .option('noTranslate', '-T 禁止使用翻译服务')
     .option('model', '-m <model_name> 单次切换SD模型')
     .option('vae', '-v <vae_name> 单次切换Vae模型')
+    .option('adetailer', '-a [tags] 使用修复器，参数使用方法同上')
+    .option('Amodel', '-am <name> 选择模型')
+    .option('Anegative', '-an [tags] 参数使用方法同上')
+    .option('Aconfidence', '-ac <float> 识别对象置信度')
     .action(async ({ options, session }, _) => {
       if (!maxTasks || taskNum < maxTasks) {
         log.debug('调用绘图 API');
@@ -117,12 +121,44 @@ export async function apply(ctx: Context, config: Config) {
         else tmpNegPrompt += negativePrompt;
         log.debug('+提示词:', prompt, '\n-提示词:', negativePrompt);
 
+        // 使用 ADetailer
+        const ADEnable = config.AD.enable;
+        let payload2 = {};
+
+        if (ADEnable && ('adetailer' in Object.keys(options))) {
+          const ADModel = config.AD.model;
+          const confidence = config.AD.confidence;
+          let ADPrompt = options?.adetailer || config.AD?.prompt;
+          let ADNegPrompt = options?.Anegative || config.AD?.negativePrompt;
+
+          // ADetailer翻译
+          ADPrompt = promptHandle(ctx, config, tmpNegPrompt, Tans);
+          ADNegPrompt = promptHandle(ctx, config, tmpNegPrompt, Tans);
+
+          payload2 = {
+            alwayson_scripts: {
+              ADetailer: {
+                args: [
+                  ADEnable,
+                  false, // true，直接使用原图
+                  {
+                    ad_model: options.Amodel || ADModel?.custom || ADModel,
+                    ...(ADPrompt !== '' && { ad_prompt: ADPrompt }),
+                    ...(ADNegPrompt !== '' && { ad_negative_prompt: ADNegPrompt }),
+                    ad_confidence: options.Aconfidence || confidence,
+                  }
+                ]
+              }
+            }
+          }
+          log.debug('ADetailer请求体:', payload2);
+        }
+
         // if (hiresFix && !options?.hiresFix) { }
         // if (restoreFaces && !options?.restoreFaces) { }
 
-
         // 构建API请求体
-        const payload = {
+        const payload1 = {
           ...(prompt !== '' && { prompt: tmpPrompt }),
           ...(negativePrompt !== '' && { negative_prompt: tmpNegPrompt }),
           seed: seed,
@@ -144,55 +180,9 @@ export async function apply(ctx: Context, config: Config) {
           ...(initImages && { init_images: [initImages] }),
         }
 
-        const pyload2 = {
-          ADetailer: {
-            args: [
-              true,
-              false,
-              {
-                ad_model: "face_yolov8n.pt",
-                // ad_model_classes: "",
-                // ad_tab_enable: true,
-                ad_prompt: "",
-                ad_negative_prompt: "",
-                ad_confidence: 0.3,
-                // ad_mask_k_largest: 0,
-                // ad_mask_min_ratio: 0.0,
-                // ad_mask_max_ratio: 1.0,
-                ad_dilate_erode: 32,
-                ad_x_offset: 0,
-                ad_y_offset: 0,
-                ad_mask_merge_invert: "None",
-                ad_mask_blur: 4,
-                ad_denoising_strength: 0.4,
-                ad_inpaint_only_masked: true,
-                ad_inpaint_only_masked_padding: 0,
-                ad_use_inpaint_width_height: false,
-                ad_inpaint_width: 512,
-                ad_inpaint_height: 512,
-                ad_use_steps: true,
-                ad_steps: 28,
-                ad_use_cfg_scale: false,
-                ad_cfg_scale: 7.0,
-                ad_use_checkpoint: false,
-                ad_checkpoint: "Use same checkpoint",
-                ad_use_vae: false,
-                ad_vae: "Use same VAE",
-                ad_use_sampler: false,
-                ad_sampler: "DPM++ 2M Karras",
-                ad_use_noise_multiplier: false,
-                ad_noise_multiplier: 1.0,
-                ad_use_clip_skip: false,
-                ad_clip_skip: 1,
-                ad_restore_face: false,
-                ad_controlnet_model: "None",
-                ad_controlnet_module: "None",
-                ad_controlnet_weight: 1.0,
-                ad_controlnet_guidance_start: 0.0,
-                ad_controlnet_guidance_end: 1.0
-              }
-            ]
-          }
+        const payload = {
+          ...payload1,
+          ...payload2
         }
 
         log.debug('API请求体:', payload);
@@ -270,27 +260,6 @@ export async function apply(ctx: Context, config: Config) {
     });
 
 
-  // 注册 Interruptapi 指令
-  ctx.command('sd').subcommand('sdstop', '中断当前操作')
-    .action(async () => {
-      try {
-        log.debug('调用中断 API');
-
-        // 调用 Interruptapi
-        const response = await ctx.http('post', `${endpoint}/sdapi/v1/interrupt`, {
-        });
-
-        log.debug('API响应数据:', response);
-
-        taskNum--;
-        return '已终止一个任务';
-      } catch (error) {
-        log.error('错误:', error.detail);
-        return `错误: ${error.message}`;
-      }
-    });
-
-
   // 注册 Endpoint Interrogate 指令
   ctx.command('sd').subcommand('sdtag [imgURL]', '图片生成提示词')
     .option('model', '-m <model_name> 使用的模型')
@@ -312,7 +281,7 @@ export async function apply(ctx: Context, config: Config) {
         }
         // log.debug('获取图片参数:', _);
 
-        const { tagger, threshold, score } = config.WD
+        const { tagger, threshold, indicators, score } = config.WD
 
         const payload = {
           image: _,
@@ -349,8 +318,23 @@ export async function apply(ctx: Context, config: Config) {
             const [gen, sen, que, exp] = [general, sensitive, questionable, explicit].map(toFixed2);
 
             if (imgCensor) {
-              if (Math.max(que, sen, exp) > score) censorResult = true;
-              else censorResult = false;
+              const inds = indicators.map(metric => {
+                switch (metric) {
+                  case "que":
+                    return que;
+                  case "sen":
+                    return sen;
+                  case "exp":
+                    return exp;
+                  default:
+                    return 0;
+                }
+              });
+              if (Math.max(...inds) > score) {
+                censorResult = true;
+              } else {
+                censorResult = false;
+              }
             }
             if (!imgCensor || (outputMethod === '关键信息' || outputMethod === '详细信息')) {
               session.send(`普通度: ${gen}\n敏感度: ${sen}\n可疑度: ${que}\n露骨度: ${exp}`);
@@ -375,6 +359,28 @@ export async function apply(ctx: Context, config: Config) {
         ]));
       }
     });
+
+
+  // 注册 Interruptapi 指令
+  ctx.command('sd').subcommand('sdstop', '中断当前操作')
+    .action(async () => {
+      try {
+        log.debug('调用中断 API');
+
+        // 调用 Interruptapi
+        const response = await ctx.http('post', `${endpoint}/sdapi/v1/interrupt`, {
+        });
+
+        log.debug('API响应数据:', response);
+
+        taskNum--;
+        return '已终止一个任务';
+      } catch (error) {
+        log.error('错误:', error.detail);
+        return `错误: ${error.message}`;
+      }
+    });
+
 
 
   // 注册 GetModels 指令
