@@ -6,7 +6,6 @@ import { Config, log } from './config';
 export async function promptHandle(ctx: Context, config: Config, text?: string, trans?: boolean, options?: any): Promise<string> {
   // 检查输入是否有效
   if (!text || typeof text !== 'string') return '';
-
   // 通用格式化逻辑，格式化传入提示词
   function formatInput(text: string) {
     // 使用逗号和中文逗号分割字符串
@@ -70,9 +69,6 @@ export async function promptHandle(ctx: Context, config: Config, text?: string, 
 
 
 async function translateZH(ctx: Context, text: string) {
-  // 计算耗时
-  let start = performance.now();
-
   // 匹配所有中文字符的正则表达式
   const chineseRegex = /[\u4e00-\u9fa5]+/g;
 
@@ -101,7 +97,5 @@ async function translateZH(ctx: Context, text: string) {
   });
 
   log.debug('翻译完成')
-  let end = performance.now();
-  log.debug(`翻译耗时: ${end - start} ms`);
   return translatedText;
 }
