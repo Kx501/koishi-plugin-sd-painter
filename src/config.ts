@@ -1,4 +1,5 @@
 import { Schema, Logger } from 'koishi';
+import { parse } from 'path';
 
 export const log = new Logger('sd-webui-api');
 
@@ -22,10 +23,12 @@ export interface Config {
   };
   AD: {
     enable: boolean; // 默认开启
-    model: any; // 模型选项
-    prompt: string; // 正向提示词
-    negativePrompt: string; // 负向提示词
-    confidence: number; // 检测置信度
+    models: {
+      name: string;  // 模型选项
+      prompt: string; // 正向提示词
+      negativePrompt: string; // 负向提示词
+      confidence: number; // 检测置信度
+    }[];
   };
   WD: {
     tagger: string; // 图像反推模型
@@ -98,26 +101,26 @@ export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
     AD: Schema.object({
       enable: Schema.boolean().default(false).description('使用ADetailer修复'),
-      model: Schema.array(
-        Schema.union([
-          'face_yolov8n.pt',
-          'face_yolov8s.pt',
-          'hand_yolov8n.pt',
-          'person_yolov8n-seg.pt',
-          'person_yolov8s-seg.pt',
-          'yolov8x-worldv2.pt',
-          'mediapipe_face_full',
-          'mediapipe_face_short',
-          'mediapipe_face_mesh',
-          'mediapipe face mesh eyes only',
-          Schema.object({
-            custom: Schema.string().description('填写模型名称'),
-          }).description('自定义模型'),
-        ]).description('预设模型选择'),
-      ),
-      prompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认正向提示词，指令传入参数时覆盖此处'),
-      negativePrompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认负向提示词，指令传入参数时覆盖此处'),
-      confidence: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.3).description('识别对象的置信度'),
+      models: Schema.array(
+        Schema.object({
+          name: Schema.union([
+            'face_yolov8n.pt',
+            'face_yolov8s.pt',
+            'hand_yolov8n.pt',
+            'person_yolov8nseg.pt',
+            'person_yolov8s-seg.pt',
+            'yolov8x-worldv2.pt',
+            'mediapipe_face_full',
+            'mediapipe_face_short',
+            'mediapipe_face_mesh',
+            'mediapipe face mesh eyes only',
+            Schema.string().default('None').description('自定义模型 <填入名称>'),
+          ]).default('自定义模型').description('模型选择'),
+          prompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认正向提示词，不输入时使用绘画提示词'),
+          negativePrompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认负向提示词，使用方法同上'),
+          confidence: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.3).description('识别对象的置信度'),
+        })
+      )
     }).collapse(),
   }).description('修复设置'),
   Schema.object({

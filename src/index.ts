@@ -56,13 +56,10 @@ export async function apply(ctx: Context, config: Config) {
     .option('noNegativeTags', '-N 禁用默认负向提示词')
     // .option('hiresFix', '-H 禁用高分辨率修复')
     // .option('restoreFaces', '-R 禁用人脸修复')
+    .option('noAdetailer', '-A 禁用修复器')
     .option('noTranslate', '-T 禁止使用翻译服务')
     .option('model', '-m <model_name> 单次切换SD模型')
     .option('vae', '-v <vae_name> 单次切换Vae模型')
-    .option('adetailer', '-a [tags] 使用修复器，参数使用方法同上')
-    .option('Amodel', '-am <name> 选择模型')
-    .option('Anegative', '-an [tags] 参数使用方法同上')
-    .option('Aconfidence', '-ac <float> 识别对象置信度')
     .action(async ({ options, session }, _) => {
       if (!maxTasks || taskNum < maxTasks) {
         log.debug('调用绘图 API');
@@ -98,10 +95,9 @@ export async function apply(ctx: Context, config: Config) {
         const vaeName = options?.vae;
         log.debug('最终参数:', { steps, cfg, size, smpName, schName, modelName, vaeName });
 
-        // 构建 prompt 和 negativePrompt
+        // 翻译
         let tmpPrompt = _;
         let tmpNegPrompt = options?.negative;
-        // 翻译
         tmpPrompt = promptHandle(ctx, config, tmpPrompt, Tans);
         log.debug('+提示词翻译为:', tmpPrompt);
         tmpNegPrompt = promptHandle(ctx, config, tmpNegPrompt, Tans);
@@ -122,37 +118,42 @@ export async function apply(ctx: Context, config: Config) {
         log.debug('+提示词:', prompt, '\n-提示词:', negativePrompt);
 
         // 使用 ADetailer
-        const ADEnable = config.AD.enable;
+        const adEnable = config.AD.enable;
         let payload2 = {};
 
-        if (ADEnable && ('adetailer' in Object.keys(options))) {
-          const ADModel = config.AD.model;
-          const confidence = config.AD.confidence;
-          let ADPrompt = options?.adetailer || config.AD?.prompt;
-          let ADNegPrompt = options?.Anegative || config.AD?.negativePrompt;
+        if (!options?.noAdetailer && adEnable) {
+          const tmpList: any[] = [
+            adEnable,
+            false, // true，直接使用原图
+          ];
 
-          // ADetailer翻译
-          ADPrompt = promptHandle(ctx, config, tmpNegPrompt, Tans);
-          ADNegPrompt = promptHandle(ctx, config, tmpNegPrompt, Tans);
+          config.AD.models.forEach(model => {
+            // ADetailer翻译
+            let ADPrompt = model.prompt;
+            let ADNegPrompt = model.negativePrompt;
+            ADPrompt = promptHandle(ctx, config, ADPrompt, Tans);
+            ADNegPrompt = promptHandle(ctx, config, ADNegPrompt, Tans);
 
+            const tmpPayload = {
+              ad_model: model.name,
+              ...(ADPrompt !== '' && { ad_prompt: ADPrompt }),
+              ...(ADNegPrompt !== '' && { ad_negative_prompt: ADNegPrompt }),
+              ad_confidence: model.confidence,
+            };
+            tmpList.push(tmpPayload);
+          });
+
+          // 构建请求体
           payload2 = {
             alwayson_scripts: {
               ADetailer: {
-                args: [
-                  ADEnable,
-                  false, // true，直接使用原图
-                  {
-                    ad_model: options.Amodel || ADModel?.custom || ADModel,
-                    ...(ADPrompt !== '' && { ad_prompt: ADPrompt }),
-                    ...(ADNegPrompt !== '' && { ad_negative_prompt: ADNegPrompt }),
-                    ad_confidence: options.Aconfidence || confidence,
-                  }
-                ]
-              }
-            }
-          }
+                args: tmpList,
+              },
+            },
+          };
           log.debug('ADetailer请求体:', payload2);
         }
+
 
         // if (hiresFix && !options?.hiresFix) { }
         // if (restoreFaces && !options?.restoreFaces) { }
