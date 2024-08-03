@@ -78,7 +78,7 @@ export async function apply(ctx: Context, config: Config) {
             initImages = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
             if (!initImages) return '请检查图片链接或引用图片消息'
           }
-          log.debug('图生图参数处理结果:', initImages);
+          log.debug('图生图图片参数处理结果:', initImages);
         }
 
         // 用户选项覆盖默认配置
@@ -93,7 +93,6 @@ export async function apply(ctx: Context, config: Config) {
         const Tans = options?.noTranslate || useTranslation;
         const modelName = options?.model;
         const vaeName = options?.vae;
-        log.debug('最终参数:', { steps, cfg, size, smpName, schName, modelName, vaeName });
 
         // 翻译
         let tmpPrompt = _;
@@ -136,7 +135,7 @@ export async function apply(ctx: Context, config: Config) {
               ad_model: model.name,
               ...(ADPrompt !== '' && { ad_prompt: ADPrompt }),
               ...(ADNegPrompt !== '' && { ad_negative_prompt: ADNegPrompt }),
-              ad_confidence: model.confidence,
+              ad_confidence: model.confidence
             };
             tmpList.push(tmpPayload);
           });
@@ -146,10 +145,9 @@ export async function apply(ctx: Context, config: Config) {
             alwayson_scripts: {
               ADetailer: {
                 args: tmpList,
-              },
-            },
-          };
-          log.debug('ADetailer请求体:', payload2);
+              }
+            }
+          }
         }
 
 
@@ -226,12 +224,11 @@ export async function apply(ctx: Context, config: Config) {
             }
 
             if (imgCensor) {
-              // log.debug('传入审核:', image);
               session.send('进入审核阶段...')
               await session.execute(`sdtag '${image}'`);
               log.debug('审核评分', censorResult);
               if (censorResult) {
-                log.debug('图片被标记为不适合');
+                log.debug('图片被标记为不合适');
                 session.send('图片违规');
                 if (outputMethod !== '详细信息') return;
               }
@@ -308,7 +305,7 @@ export async function apply(ctx: Context, config: Config) {
               headers: header1,
               data: payload
             });
-            log.debug('响应结果', response);
+            // log.debug('响应结果', response);
             log.debug('API响应状态:', response.statusText);
             const { general, sensitive, questionable, explicit } = response.data.caption;
             const result = Object.keys(response.data.caption).slice(4).join(', ');
@@ -370,7 +367,7 @@ export async function apply(ctx: Context, config: Config) {
         const response = await ctx.http('post', `${endpoint}/sdapi/v1/interrupt`, {
         });
 
-        log.debug('API响应数据:', response);
+        // log.debug('API响应结果:', response);
 
         taskNum--;
         return '已终止一个任务';
