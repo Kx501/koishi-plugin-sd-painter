@@ -129,10 +129,8 @@ export async function apply(ctx: Context, config: Config) {
 
           config.AD.models.forEach(model => {
             // ADetailer翻译
-            let ADPrompt = model.prompt;
-            let ADNegPrompt = model.negativePrompt;
-            ADPrompt = promptHandle(ctx, config, ADPrompt, Tans);
-            ADNegPrompt = promptHandle(ctx, config, ADNegPrompt, Tans);
+            let ADPrompt = promptHandle(ctx, config, model.prompt, Tans);
+            let ADNegPrompt = promptHandle(ctx, config, model.negativePrompt, Tans);
 
             const tmpPayload = {
               ad_model: model.name,
