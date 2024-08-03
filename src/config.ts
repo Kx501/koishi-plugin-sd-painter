@@ -81,14 +81,14 @@ export const Config: Schema<Config> = Schema.intersect([
         'Polyexponential',
         'SGM Uniform'
       ]).default('Automatic').description('调度器选择'),
-      imgSize: Schema.tuple([Schema.number(), Schema.number()]).default([512, 512]).description(`默认宽度和高度(16的倍数)
+      imgSize: Schema.tuple([Number, Number]).default([512, 512]).description(`默认宽度和高度(16的倍数)
   - 模板：
   - 256x256、512x512、512x768、832x1216、1024x1024、1280x720、1920x1080
   `),
-      cfgScale: Schema.number().min(0).max(30).step(0.1).default(7).description('引导系数，用于控制图像对提示词服从程度'),
-      txt2imgSteps: Schema.number().min(1).max(150).step(1).default(20).description('文生图默认采样步数'),
-      img2imgSteps: Schema.number().min(1).max(150).step(1).default(40).description('图生图默认采样步数'),
-      maxSteps: Schema.number().min(1).max(150).step(1).default(60).description('最大允许采样步数'),
+      cfgScale: Schema.number().min(0).max(30).step(0.1).role('slider').default(7).description('引导系数，用于控制图像对提示词服从程度'),
+      txt2imgSteps: Schema.number().min(1).max(150).step(1).role('slider').default(20).description('文生图默认采样步数'),
+      img2imgSteps: Schema.number().min(1).max(150).step(1).role('slider').default(20).description('图生图默认采样步数'),
+      maxSteps: Schema.number().min(1).max(150).step(1).role('slider').default(40).description('最大允许采样步数'),
       prompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认正向提示词'),
       negativePrompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认负向提示词'),
       prePrompt: Schema.boolean().default(true).description('默认正向提示词是否放在最前面'),
@@ -152,7 +152,7 @@ export const Config: Schema<Config> = Schema.intersect([
       '关键信息',
       '详细信息'
     ]).default('仅图片').description('输出方式，"详细信息"反推审核将失效'),
-    maxPrompt: Schema.number().min(0).default(0).description('最大提示词数限制，设置为0关闭'),
+    maxPrompt: Schema.number().min(0).max(200).step(1).role('slider').default(0).description('最大提示词数限制，设置为0关闭'),
     excessHandle: Schema.union([
       '仅提示',
       '从前删除',

@@ -22,9 +22,8 @@ export const usage = `
 
 // 插件主函数
 export async function apply(ctx: Context, config: Config) {
-  // 调试用
   // ctx.on('message-created', (session: Session) => {
-  //   // log.debug(JSON.stringify(session.event, null, 2));
+  //   log.debug(JSON.stringify(session, null, 2))
   //   log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
   // }, true)
 
@@ -39,7 +38,67 @@ export async function apply(ctx: Context, config: Config) {
   };
 
   let taskNum = 0;
-  let censorResult = false;
+
+
+  // 调用 Interrogateapi
+  async function wdProcess(session: Session, image: string, cmd: boolean, options?: any): Promise<boolean | string> {
+    let wdResult = false;
+    const { tagger, threshold, indicators, score } = config.WD
+
+    const payload = {
+      image: image,
+      model: options?.model || tagger,
+      threshold: cmd ? (options?.threshold || threshold) : 1
+    };
+    // log.debug('API请求体:', payload);
+    try {
+      const response = await ctx.http('post', `${endpoint}/tagger/v1/interrogate`, {
+        headers: header1,
+        data: payload
+      });
+      // log.debug('响应结果', response);
+      log.debug('反推API响应状态:', response.statusText);
+      const { general, sensitive, questionable, explicit } = response.data.caption;
+      const result = Object.keys(response.data.caption).slice(4).join(', ');
+
+      const toFixed2 = (num: number) => parseFloat(num.toFixed(4));
+      const [gen, sen, que, exp] = [general, sensitive, questionable, explicit].map(toFixed2);
+
+      if (!cmd) {
+        log.debug('选择指标:', indicators);
+        for (const metric of indicators) {
+          let value = 0;
+          switch (metric) {
+            case "que":
+              value = que;
+              break;
+            case "sen":
+              value = sen;
+              break;
+            case "exp":
+              value = exp;
+              break;
+          }
+          if (value > score) {
+            wdResult = true;
+            log.debug(`指标 ${metric} 不通过审核，其值为 ${value}`);
+            break;
+          }
+        }
+      }
+
+      if (cmd || outputMethod !== '仅图片') {
+        session.send(`普通性: ${gen}\n敏感性: ${sen}\n可疑性: ${que}\n暴露性: ${exp}`);
+      }
+
+      if (cmd) return `反推结果:\n${result}`;
+      else return wdResult;
+    } catch (error) {
+      log.error('反推出错:', error);
+      if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
+      return `反推出错: ${error.message}`;
+    }
+  }
 
 
   // 注册 text2img/img2img 指令
@@ -74,11 +133,14 @@ export async function apply(ctx: Context, config: Config) {
           log.debug('开始获取图片');
           const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
           if (!hasProtocol(initImages)) {
-            // 只测试了OneBot，不适用于控制台沙盒
-            initImages = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
-            if (!initImages) return '请检查图片链接或引用图片消息'
+            if (session.platform === 'onebot')
+              initImages = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
+            else if (session.platform.includes('sandbox')) {
+              initImages = h.select(session?.quote?.content, 'img')[0]?.attrs?.src.split(',')[1];
+            }
+            if (!initImages) return '请检查图片链接或引用自己发送的图片消息'
           }
-          log.debug('图生图图片参数处理结果:', initImages);
+          // log.debug('图生图图片参数处理结果:', initImages);
         }
 
         // 用户选项覆盖默认配置
@@ -97,9 +159,9 @@ export async function apply(ctx: Context, config: Config) {
         // 翻译
         let tmpPrompt = _;
         let tmpNegPrompt = options?.negative;
-        tmpPrompt = promptHandle(ctx, config, tmpPrompt, Tans);
+        tmpPrompt = await promptHandle(ctx, config, tmpPrompt, Tans);
         log.debug('+提示词翻译为:', tmpPrompt);
-        tmpNegPrompt = promptHandle(ctx, config, tmpNegPrompt, Tans);
+        tmpNegPrompt = await promptHandle(ctx, config, tmpNegPrompt, Tans);
         log.debug('-提示词翻译为:', tmpNegPrompt);
         // 确定位置
         let { prompt, negativePrompt } = config.IMG;
@@ -126,10 +188,10 @@ export async function apply(ctx: Context, config: Config) {
             false, // true，直接使用原图
           ];
 
-          config.AD.models.forEach(model => {
+          config.AD.models.forEach(async model => {
             // ADetailer翻译
-            let ADPrompt = promptHandle(ctx, config, model.prompt, Tans);
-            let ADNegPrompt = promptHandle(ctx, config, model.negativePrompt, Tans);
+            let ADPrompt = await promptHandle(ctx, config, model.prompt, Tans);
+            let ADNegPrompt = await promptHandle(ctx, config, model.negativePrompt, Tans);
 
             const tmpPayload = {
               ad_model: model.name,
@@ -150,10 +212,6 @@ export async function apply(ctx: Context, config: Config) {
           }
         }
 
-
-        // if (hiresFix && !options?.hiresFix) { }
-        // if (restoreFaces && !options?.restoreFaces) { }
-
         // 构建API请求体
         const payload1 = {
           ...(prompt !== '' && { prompt: tmpPrompt }),
@@ -173,7 +231,6 @@ export async function apply(ctx: Context, config: Config) {
               ...(vaeName && { sd_vae: vaeName }),
             }
           }),
-          // override_settings_restore_afterwards: isTemporary,
           ...(initImages && { init_images: [initImages] }),
         }
 
@@ -212,8 +269,9 @@ export async function apply(ctx: Context, config: Config) {
                 data: payload
               });
             }
-            log.debug('API响应状态:', response.statusText);
+            log.debug('绘画API响应状态:', response.statusText);
             let image = response.data.images[0];
+            // log.debug(image); // 开发其他平台时做参考
 
             if (outputMethod === '关键信息') {
               session.send(`步数:${steps}\n尺寸:${size}\n服从度:${cfg}\n采样器:${smpName}\n调度器:${schName}`);
@@ -224,13 +282,12 @@ export async function apply(ctx: Context, config: Config) {
             }
 
             if (imgCensor) {
-              session.send('进入审核阶段...')
-              await session.execute(`sdtag '${image}'`);
-              log.debug('审核评分', censorResult);
+              session.send('进入审核阶段...');
+              let censorResult = await wdProcess(session, image, false);
+              log.debug('是否过审:', !censorResult);
               if (censorResult) {
-                log.debug('图片被标记为不合适');
                 session.send('图片违规');
-                if (outputMethod !== '详细信息') return;
+                if (outputMethod !== '详细信息') return; // 阻止图片输出
               }
             }
             image = Buffer.from(response.data.images[0], 'base64');
@@ -243,7 +300,7 @@ export async function apply(ctx: Context, config: Config) {
         }
 
         taskNum++;
-        session.send(await process());
+        await session.send(await process());
         taskNum--;
       } else {
         // 超过最大任务数的处理逻辑
@@ -267,85 +324,30 @@ export async function apply(ctx: Context, config: Config) {
 
         // 获取图片
         log.debug('开始获取图片');
-        if (!imgCensor) {
-          const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
-          if (!hasProtocol(_)) {
-            // 只适用于OneBot
+
+        const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
+        if (!hasProtocol(_)) {
+          if (session.platform === 'onebot')
             _ = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
-            if (!_) return '请检查图片链接或引用图片消息';
-          }
-        }
-        // log.debug('获取图片参数:', _);
-
-        const { tagger, threshold, indicators, score } = config.WD
-
-        const payload = {
-          image: _,
-          model: options?.model || tagger,
-          threshold: imgCensor ? 1 : (options?.threshold || threshold)
-        };
-        log.debug('API请求体:', payload);
-
-        if (!imgCensor) {
-          if (taskNum === 1) {
-            session.send(Random.pick([
-              '开始反推提示词...',
-              '在推了在推了...让我仔细想想...',
-              '我在想想想了...',
-            ]))
-          } else {
-            session.send(`在推了在推了，不过前面还有 ${taskNum} 个任务……`)
-          }
+          else if (session.platform.includes('sandbox'))
+            _ = h.select(session?.quote?.content, 'img')[0]?.attrs?.src.split(',')[1];
+          if (!_) return '请检查图片链接或引用自己发送的图片消息';
         }
 
-        async function process() {
-          try {
-            // 调用 Interrogateapi
-            const response = await ctx.http('post', `${endpoint}/tagger/v1/interrogate`, {
-              headers: header1,
-              data: payload
-            });
-            // log.debug('响应结果', response);
-            log.debug('API响应状态:', response.statusText);
-            const { general, sensitive, questionable, explicit } = response.data.caption;
-            const result = Object.keys(response.data.caption).slice(4).join(', ');
+        log.debug('获取图片参数:', _);
 
-            const toFixed2 = (num: number) => parseFloat(num.toFixed(4));
-            const [gen, sen, que, exp] = [general, sensitive, questionable, explicit].map(toFixed2);
-
-            if (imgCensor) {
-              const inds = indicators.map(metric => {
-                switch (metric) {
-                  case "que":
-                    return que;
-                  case "sen":
-                    return sen;
-                  case "exp":
-                    return exp;
-                  default:
-                    return 0;
-                }
-              });
-              if (Math.max(...inds) > score) {
-                censorResult = true;
-              } else {
-                censorResult = false;
-              }
-            }
-            if (!imgCensor || (outputMethod === '关键信息' || outputMethod === '详细信息')) {
-              session.send(`普通度: ${gen}\n敏感度: ${sen}\n可疑度: ${que}\n露骨度: ${exp}`);
-            }
-
-            if (!imgCensor) return `反推结果:\n${result}`;
-          } catch (error) {
-            log.error('反推出错:', error);
-            if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
-            return `反推出错: ${error.message}`;
-          }
+        if (taskNum === 0) {
+          session.send(Random.pick([
+            '开始反推提示词...',
+            '在推了在推了...让我仔细想想...',
+            '我在想想想了...',
+          ]))
+        } else {
+          session.send(`在推了在推了，不过前面还有 ${taskNum} 个任务……`)
         }
 
         taskNum++;
-        session.send(await process());
+        session.send(await wdProcess(session, _, true, options) as string);
         taskNum--;
       } else {
         session.send(Random.pick([
@@ -376,7 +378,6 @@ export async function apply(ctx: Context, config: Config) {
         return `错误: ${error.message}`;
       }
     });
-
 
 
   // 注册 GetModels 指令
@@ -410,10 +411,10 @@ export async function apply(ctx: Context, config: Config) {
       try {
         // 查询
         if ((sd || vae) && !(_1 || _2)) {
-          log.debug('调用查询SD模型 API');
+          log.debug('调用查询SD/Vae模型 API');
           const path = sd ? 'sd-models' : 'sd-vae';
           const response = await ctx.http('get', `${endpoint}/sdapi/v1/${path}`, { headers: header2 });
-          log.debug('API响应状态:', response.statusText);
+          log.debug('查询SD/Vae模型API响应状态:', response.statusText);
           const models = response.data;
 
           const result = models.map((model: { filename: string; model_name: string; }) => {
@@ -443,7 +444,7 @@ export async function apply(ctx: Context, config: Config) {
                   headers: header1,
                   data: payload
                 });
-                log.debug('API响应状态:', response.statusText);
+                log.debug('切换模型API响应状态:', response.statusText);
 
                 return '模型更换成功'
               } catch (error) {
@@ -464,9 +465,9 @@ export async function apply(ctx: Context, config: Config) {
         }
 
         if (embeddeding) {
-          log.debug('调用获取嵌入模型 API');
+          log.debug('调用查询嵌入模型 API');
           const response = await ctx.http('get', `${endpoint}/sdapi/v1/embeddings`, { headers: header2 });
-          log.debug('API响应状态:', response.statusText);
+          log.debug('查询嵌入模型API响应状态:', response.statusText);
           const embeddings = response.data;
 
           const loadedEmbeddings = Object.keys(embeddings.loaded).map(key => `可加载的嵌入: ${key}`).join('\n');
@@ -477,9 +478,9 @@ export async function apply(ctx: Context, config: Config) {
         }
 
         if (hybridnetwork) {
-          log.debug('获取超网络模型 API');
+          log.debug('调用查询超网络模型 API');
           const response = await ctx.http('get', `${endpoint}/sdapi/v1/hypernetworks`, { headers: header2 });
-          log.debug('API响应状态:', response.statusText);
+          log.debug('查询超网络模型API响应状态:', response.statusText);
           const hypernetworks = response.data;
 
           const result = hypernetworks.map((hn: { filename: string; model_name: string }) => {
@@ -491,9 +492,9 @@ export async function apply(ctx: Context, config: Config) {
         }
 
         if (lora) {
-          log.debug('调用获取Lora模型 API');
+          log.debug('调用查询Lora模型 API');
           const response = await ctx.http('get', `${endpoint}/sdapi/v1/loras`, { headers: header2 });
-          log.debug('API响应状态:', response.statusText);
+          log.debug('查询Lora模型API响应状态:', response.statusText);
           const loras = response.data;
 
           const result = loras.map((lora: { filename: string; model_name: string; }) => {
@@ -505,9 +506,9 @@ export async function apply(ctx: Context, config: Config) {
         }
 
         if (wd) {
-          log.debug('调用获取WD模型 API');
+          log.debug('调用查询WD模型 API');
           const response = await ctx.http('get', `${endpoint}/tagger/v1/interrogators`, { headers: header2 });
-          log.debug('API响应状态:', response.statusText);
+          log.debug('查询WD模型API响应状态:', response.statusText);
           const models = response.data.models;
 
           const result = models.map((modelName: string) => `模型名称: ${modelName}`).join('\n\n');
