@@ -1,5 +1,4 @@
 import { Schema, Logger } from 'koishi';
-import { parse } from 'path';
 
 export const log = new Logger('sd-webui-api');
 

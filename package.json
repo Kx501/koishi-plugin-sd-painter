@@ -1,7 +1,7 @@
 {
   "name": "@kxy051/koishi-plugin-sd-webui-api",
   "description": "对接Stable Diffusion",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.1-beta.2",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -31,9 +31,6 @@
     "service": {
       "required": [
         "http"
-      ],
-      "optional": [
-        "puppeteer"
       ]
     },
     "preview": true,

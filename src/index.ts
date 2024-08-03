@@ -5,7 +5,7 @@ import { Config, log } from './config';
 export const name = 'sd-webui-api';
 export const inject = {
   required: ['http'],
-  optional: ['puppeteer', 'translator']
+  optional: ['translator']
 }
 export * from './config'
 
