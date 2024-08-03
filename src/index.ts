@@ -300,7 +300,7 @@ export async function apply(ctx: Context, config: Config) {
         }
 
         taskNum++;
-        await session.send(await process());
+        session.send(await process());
         taskNum--;
       } else {
         // 超过最大任务数的处理逻辑
@@ -372,7 +372,7 @@ export async function apply(ctx: Context, config: Config) {
         // log.debug('API响应结果:', response);
 
         taskNum--;
-        return '已终止一个任务';
+        return `${response}`;
       } catch (error) {
         log.error('错误:', error.detail);
         return `错误: ${error.message}`;
