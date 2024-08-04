@@ -130,7 +130,7 @@ export async function apply(ctx: Context, config: Config) {
         // 图生图
         let initImages = options?.img2img;
         if (options.hasOwnProperty('img2img')) {
-          log.debug('开始获取图片');
+          log.debug('获取图片...');
           const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
           if (!hasProtocol(initImages)) {
             if (session.platform === 'onebot')
@@ -188,7 +188,8 @@ export async function apply(ctx: Context, config: Config) {
             false, // true，直接使用原图
           ];
 
-          config.AD.models.forEach(async model => {
+          await Promise.all(config.AD.models.map(async model => {
+            log.debug('处理ADetailer参数...');
             // ADetailer翻译
             let ADPrompt = await promptHandle(ctx, config, model.prompt, Tans);
             let ADNegPrompt = await promptHandle(ctx, config, model.negativePrompt, Tans);
@@ -200,7 +201,7 @@ export async function apply(ctx: Context, config: Config) {
               ad_confidence: model.confidence
             };
             tmpList.push(tmpPayload);
-          });
+          }));
 
           // 构建请求体
           payload2 = {
@@ -323,7 +324,7 @@ export async function apply(ctx: Context, config: Config) {
         log.debug('选择子选项:', options);
 
         // 获取图片
-        log.debug('开始获取图片');
+        log.debug('获取图片');
 
         const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
         if (!hasProtocol(_)) {
