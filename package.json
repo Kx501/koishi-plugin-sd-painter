@@ -1,7 +1,7 @@
 {
-	"name": "@kxy051/koishi-plugin-sd-webui-api",
+	"name": "@kx501/koishi-plugin-sd-webui-api",
 	"description": "对接Stable Diffusion WebUI",
-	"version": "1.0.1-beta1",
+	"version": "1.0.0-beta1",
 	"main": "lib/index.js",
 	"typings": "lib/index.d.ts",
 	"files": [
@@ -9,12 +9,12 @@
 		"dist"
 	],
 	"contributors": [
-		"kxy051 <a2483654847@gmail.com>"
+		"kx501 <x501@foxmail.com>"
 	],
-	"homepage": "https://github.com/Kxy051/koishi-plugin-sd-webui-api",
+	"homepage": "https://github.com/Kx501/koishi-plugin-sd-webui-api",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/Kxy051/koishi-plugin-sd-webui-api.git"
+		"url": "git+https://github.com/Kx501/koishi-plugin-sd-webui-api.git"
 	},
 	"license": "MIT",
 	"keywords": [

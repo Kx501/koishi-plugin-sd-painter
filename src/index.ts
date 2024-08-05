@@ -22,12 +22,12 @@ export const usage = `
 
 // 插件主函数
 export async function apply(ctx: Context, config: Config) {
-  // ctx.on('message-created', (session: Session) => {
-  //   log.debug(JSON.stringify(session, null, 2))
-  //   log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
-  // }, true)
+  ctx.on('message-created', (session: Session) => {
+    log.debug(JSON.stringify(session, null, 2))
+    log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
+  }, true)
 
-  const { endpoint, useTranslation, outputMethod, maxTasks } = config;
+  const { endpoint, useTranslation: useTrans, outputMethod: outMeth, maxTasks } = config;
   const imgCensor = config.WD.imgCensor;
   const header1 = {
     'accept': 'application/json',
@@ -87,7 +87,7 @@ export async function apply(ctx: Context, config: Config) {
         }
       }
 
-      if (cmd || outputMethod !== '仅图片') {
+      if (cmd || outMeth !== '仅图片') {
         session.send(`普通性: ${gen}\n敏感性: ${sen}\n可疑性: ${que}\n暴露性: ${exp}`);
       }
 
@@ -125,7 +125,7 @@ export async function apply(ctx: Context, config: Config) {
         log.debug('选择子选项:', options);
 
         // 从config对象中读取配置
-        const { save, imgSize, sampler, scheduler, cfgScale, txt2imgSteps, img2imgSteps, maxSteps, prePrompt, preNegPrompt, hiresFix, restoreFaces } = config.IMG;
+        const { save, imgSize, sampler, scheduler, cfgScale, txt2imgSteps: t2iSteps, img2imgSteps: i2iSteps, maxSteps, prePrompt, preNegPrompt, hiresFix, restoreFaces: resFaces } = config.IMG;
 
         // 图生图
         let initImages = options?.img2img;
@@ -144,7 +144,7 @@ export async function apply(ctx: Context, config: Config) {
         }
 
         // 用户选项覆盖默认配置
-        const steps = options?.steps || (initImages ? img2imgSteps : txt2imgSteps);
+        const steps = options?.steps || (initImages ? i2iSteps : t2iSteps);
         const cfg = options?.cfgScale || cfgScale;
         const size = options?.size ? options?.size.split('x').map(Number) : imgSize;
         const seed = options?.seed || -1;
@@ -152,7 +152,7 @@ export async function apply(ctx: Context, config: Config) {
         const schName = options?.scheduler || scheduler;
         const noPosTags = options?.noPositiveTags;
         const noNegTags = options?.noNegativeTags;
-        const Tans = options?.noTranslate || useTranslation;
+        const Tans = options?.noTranslate || useTrans;
         const modelName = options?.model;
         const vaeName = options?.vae;
 
@@ -224,7 +224,7 @@ export async function apply(ctx: Context, config: Config) {
           ...((prompt !== '' || negativePrompt !== '') && { cfg_scale: cfg }),
           width: size[0],
           height: size[1],
-          ...(restoreFaces && { restore_faces: true }),
+          ...(resFaces && { restore_faces: true }),
           save_images: save,
           ...((modelName || vaeName) && {
             override_settings: {
@@ -274,11 +274,11 @@ export async function apply(ctx: Context, config: Config) {
             let image = response.data.images[0];
             // log.debug(image); // 开发其他平台时做参考
 
-            if (outputMethod === '关键信息') {
+            if (outMeth === '关键信息') {
               session.send(`步数:${steps}\n尺寸:${size}\n服从度:${cfg}\n采样器:${smpName}\n调度器:${schName}`);
               session.send(`正向提示词:\n${prompt}`);
               if (options?.negative !== undefined) session.send(`负向提示词:\n${negativePrompt}`);
-            } else if (outputMethod === '详细信息') {
+            } else if (outMeth === '详细信息') {
               session.send(JSON.stringify(payload, null, 4))
             }
 
@@ -288,7 +288,7 @@ export async function apply(ctx: Context, config: Config) {
               log.debug('是否过审:', !censorResult);
               if (censorResult) {
                 session.send('图片违规');
-                if (outputMethod !== '详细信息') return; // 阻止图片输出
+                if (outMeth !== '详细信息') return; // 阻止图片输出
               }
             }
             image = Buffer.from(response.data.images[0], 'base64');
@@ -401,8 +401,8 @@ export async function apply(ctx: Context, config: Config) {
       const vaeName = _2;
       const sd = options?.sd;
       const vae = options?.vae;
-      const embeddeding = options?.embeddeding;
-      const hybridnetwork = options?.hybridnetwork;
+      const emb = options?.embeddeding;
+      const hybNet = options?.hybridnetwork;
       const lora = options?.lora;
       const wd = options?.wd;
 
@@ -465,26 +465,26 @@ export async function apply(ctx: Context, config: Config) {
           ]));
         }
 
-        if (embeddeding) {
+        if (emb) {
           log.debug('调用查询嵌入模型 API');
           const response = await ctx.http('get', `${endpoint}/sdapi/v1/embeddings`, { headers: header2 });
           log.debug('查询嵌入模型API响应状态:', response.statusText);
-          const embeddings = response.data;
+          const embs = response.data;
 
-          const loadedEmbeddings = Object.keys(embeddings.loaded).map(key => `可加载的嵌入: ${key}`).join('\n');
-          const skippedEmbeddings = Object.keys(embeddings.skipped).map(key => `不兼容的嵌入: ${key}`).join('\n');
-          const result = `${loadedEmbeddings}\n\n${skippedEmbeddings}`;
+          const loadedEmbs = Object.keys(embs.loaded).map(key => `可加载的嵌入: ${key}`).join('\n');
+          const skippedEmbs = Object.keys(embs.skipped).map(key => `不兼容的嵌入: ${key}`).join('\n');
+          const result = `${loadedEmbs}\n\n${skippedEmbs}`;
 
           return result || '未找到嵌入模型信息。';
         }
 
-        if (hybridnetwork) {
+        if (hybNet) {
           log.debug('调用查询超网络模型 API');
           const response = await ctx.http('get', `${endpoint}/sdapi/v1/hypernetworks`, { headers: header2 });
           log.debug('查询超网络模型API响应状态:', response.statusText);
-          const hypernetworks = response.data;
+          const hybNets = response.data;
 
-          const result = hypernetworks.map((hn: { filename: string; model_name: string }) => {
+          const result = hybNets.map((hn: { filename: string; model_name: string }) => {
             const filename = extractFileName(hn.filename);
             return `模型名称: ${hn.model_name}\n文件名: ${filename}`;
           }).join('\n\n');
