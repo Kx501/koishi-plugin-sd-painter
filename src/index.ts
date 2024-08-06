@@ -314,7 +314,7 @@ export async function apply(ctx: Context, config: Config) {
 
             if (imgCensor) {
               session.send('进入审核阶段...');
-              let censorResult = await wdProcess(session, image, false, endpoint);
+              let censorResult = await wdProcess(session, image, false, undefined, endpoint);
               log.debug('是否过审:', !censorResult);
               if (censorResult) {
                 session.send('图片违规');
