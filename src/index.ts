@@ -21,13 +21,6 @@ export const usage = `
 2. 默认使用的是秋葉整合包
 `;
 
-// declare module 'koishi' {
-//   interface monetary {
-//     uid: number,
-//     currency: string,
-//     value: number
-//   }
-// }
 
 // 插件主函数
 export async function apply(ctx: Context, config: Config) {
