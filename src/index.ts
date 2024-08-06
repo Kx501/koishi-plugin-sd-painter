@@ -119,11 +119,11 @@ export async function apply(ctx: Context, config: Config) {
     .option('img2img', '-i [imgURL] 图生图，@图片或输入链接')
     .option('steps', '-s <number> 采样步数')
     .option('cfgScale', '-c <float> 提示词服从度')
-    .option('size', '-si <宽x高> 图像尺寸')
-    .option('seed', '-se <number> 随机种子')
-    .option('sampler', '-sa <name> 采样器')
-    .option('scheduler', '-sc <name> 调度器')
-    .option('server', '-ser <number> 指定服务器编号')
+    .option('size', '-z <宽x高> 图像尺寸')
+    .option('seed', '-e <number> 随机种子')
+    .option('sampler', '-p <name> 采样器')
+    .option('scheduler', '-r <name> 调度器')
+    .option('server', '-x <number> 指定服务器编号')
     .option('noPositiveTags', '-P 禁用默认正向提示词')
     .option('noNegativeTags', '-N 禁用默认负向提示词')
     // .option('hiresFix', '-H 禁用高分辨率修复')
@@ -349,7 +349,7 @@ export async function apply(ctx: Context, config: Config) {
   ctx.command('sd').subcommand('sdtag [imgURL]', '图片生成提示词')
     .option('model', '-m <model_name> 使用的模型')
     .option('threshold', '-t <number> 提示词输出置信度')
-    .option('server', '-ser <number> 指定服务器编号')
+    .option('server', '-x <number> 指定服务器编号')
     .action(async ({ options, session }, _) => {
       if (!maxTasks || taskNum < maxTasks) {
         log.debug('调用反推 API');
@@ -440,7 +440,7 @@ export async function apply(ctx: Context, config: Config) {
     .option('hybridnetwork', '-n 查询可用的超网络模型')
     .option('lora', '-l 查询可用的loras模型')
     .option('wd', '-w 查询可用的WD模型')
-    .option('server', '-ser <number> 指定服务器编号')
+    .option('server', '-x <number> 指定服务器编号')
     .action(async ({ session, options }, server_number, _1?, _2?) => {
       log.debug('选择子选项', options)
 
