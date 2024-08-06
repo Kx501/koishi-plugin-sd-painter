@@ -1,4 +1,5 @@
 import { Schema, Logger } from 'koishi';
+import { samplerL, schedulerL, ad_modelL, wd_modelL } from './list';
 
 export const log = new Logger('sd-webui-api');
 
@@ -60,35 +61,8 @@ export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
     IMG: Schema.object({
       save: Schema.boolean().default(false).description('是否保存图片到本地'),
-      sampler: Schema.union([
-        'DPM++ 2M',
-        'DPM++ SDE',
-        'DPM++ 2M SDE',
-        'DPM++ 2M SDE Heun',
-        'DPM++ 2S a',
-        'DPM++ 3M SDE',
-        'Euler a',
-        'Euler',
-        'LMS',
-        'Heun',
-        'DPM2',
-        'DPM2 a',
-        'DPM fast',
-        'DPM adaptive',
-        'Restart',
-        'DDIM',
-        'PLMS',
-        'UniPC',
-        'LCM'
-      ]).default('DPM++ SDE').description('采样器选择'),
-      scheduler: Schema.union([
-        'Automatic',
-        'Uniform',
-        'Karras',
-        'Exponential',
-        'Polyexponential',
-        'SGM Uniform'
-      ]).default('Automatic').description('调度器选择'),
+      sampler: Schema.union(samplerL).default('DPM++ SDE').description('采样器选择'),
+      scheduler: Schema.union(schedulerL).default('Automatic').description('调度器选择'),
       imgSize: Schema.tuple([Number, Number]).default([512, 512]).description(`默认宽度和高度(16的倍数)
   - 模板：
   - 256x256、512x512、512x768、832x1216、1024x1024、1280x720、1920x1080
@@ -117,16 +91,7 @@ export const Config: Schema<Config> = Schema.intersect([
             models: Schema.array(
               Schema.object({
                 name: Schema.union([
-                  'face_yolov8n.pt',
-                  'face_yolov8s.pt',
-                  'hand_yolov8n.pt',
-                  'person_yolov8nseg.pt',
-                  'person_yolov8s-seg.pt',
-                  'yolov8x-worldv2.pt',
-                  'mediapipe_face_full',
-                  'mediapipe_face_short',
-                  'mediapipe_face_mesh',
-                  'mediapipe face mesh eyes only',
+                  ...ad_modelL,
                   Schema.string().default('None').description('自定义模型 <填入名称>'),
                 ]).default('自定义模型').description('模型选择'),
                 prompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认正向提示词，不输入时使用绘画提示词'),
@@ -142,22 +107,7 @@ export const Config: Schema<Config> = Schema.intersect([
   }).description('修复设置'),
   Schema.object({
     WD: Schema.object({
-      tagger: Schema.union([
-        'wd-convnext-v3',
-        'wd-swinv2-v3',
-        'wd-vit-v3',
-        'wd14-convnext',
-        'wd14-convnext-v2',
-        'wd14-convnext-v2-git',
-        'wd14-convnextv2-v2',
-        'wd14-convnextv2-v2-git',
-        'wd14-moat-v2',
-        'wd14-swinv2-v2',
-        'wd14-swinv2-v2-git',
-        'wd14-vit',
-        'wd14-vit-v2',
-        'wd14-vit-v2-git',
-      ]).default('wd14-vit-v2-git').description('反推模型选择'),
+      tagger: Schema.union(wd_modelL).default('wd14-vit-v2-git').description('反推模型选择'),
       threshold: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.3).description('输出提示词的置信度'),
       imgCensor: Schema.intersect([
         Schema.object({

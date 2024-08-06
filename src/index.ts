@@ -2,6 +2,7 @@ import { Context, h, HTTP, Random, Session } from 'koishi';
 import { } from 'koishi-plugin-monetary'
 import { promptHandle } from './utils'
 import { Config, log } from './config';
+import { samplerL, schedulerL, ad_modelL, wd_modelL } from './list';
 
 export const name = 'sd-webui-api';
 export const inject = {
@@ -30,6 +31,7 @@ export async function apply(ctx: Context, config: Config) {
   // }, true)
 
   const { useTranslation: useTrans, outputMethod: outMeth, maxTasks } = config;
+  const { sampler, scheduler } = config.IMG;
   const imgCensor = config.WD.imgCensor.enable;
   const monetary = config.monetary.enable;
   const header1 = {
@@ -99,6 +101,7 @@ export async function apply(ctx: Context, config: Config) {
         }
       }
 
+      log.debug(`普通性: ${gen}\n敏感性: ${sen}\n可疑性: ${que}\n暴露性: ${exp}`);
       if (cmd || outMeth !== '仅图片') {
         session.send(`普通性: ${gen}\n敏感性: ${sen}\n可疑性: ${que}\n暴露性: ${exp}`);
       }
@@ -108,14 +111,16 @@ export async function apply(ctx: Context, config: Config) {
     } catch (error) {
       log.error('反推出错:', error);
       if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
-      return `反推出错: ${error.message}`;
+      return `反推出错: ${error.message}`.replace(/https?:\/\/[^/]+/g, (url) => {
+        return url.replace(/\/\/[^/]+/, '//***');
+      });
     }
   }
 
 
   // 注册 text2img/img2img 指令
-  ctx.command('sd [tags]', 'AI画图')
-    .option('negative', '-n <tags> 负向提示词，如果有空格首尾用引号括起来')
+  ctx.command('sd [tags]', 'AI画图，如果提示词有空格，首尾用引号括起来')
+    .option('negative', '-n <tags> 负向提示词，如果有空格，首尾用引号括起来')
     .option('img2img', '-i [imgURL] 图生图，@图片或输入链接')
     .option('steps', '-s <number> 采样步数')
     .option('cfgScale', '-c <float> 提示词服从度')
@@ -149,12 +154,18 @@ export async function apply(ctx: Context, config: Config) {
         }
 
         // 从config对象中读取配置
-        const { save, imgSize, sampler, scheduler, cfgScale, txt2imgSteps: t2iSteps, img2imgSteps: i2iSteps, maxSteps, prePrompt, preNegPrompt, hiresFix, restoreFaces: resFaces } = config.IMG;
+        const { save, imgSize, cfgScale, txt2imgSteps: t2iSteps, img2imgSteps: i2iSteps, maxSteps, prePrompt, preNegPrompt, hiresFix, restoreFaces: resFaces } = config.IMG;
         const adEnable = config.AD.ADetailer.enable;
 
         // 选择服务器
         let endpoint = selectServer();
-        if (options?.server) endpoint = servers[options.server];
+        if (options?.server)
+          if (options.server < servers.length)
+            endpoint = servers[options.server];
+          else {
+            endpoint = servers[0];
+            session.send('不存在该序列节点，自动选择0号节点')
+          }
 
         // 图生图
         let initImages = options?.img2img;
@@ -188,10 +199,9 @@ export async function apply(ctx: Context, config: Config) {
         // 翻译
         let tmpPrompt = _;
         let tmpNegPrompt = options?.negative;
-        tmpPrompt = await promptHandle(ctx, config, tmpPrompt, Trans);
-        log.debug('+提示词翻译为:', tmpPrompt);
-        tmpNegPrompt = await promptHandle(ctx, config, tmpNegPrompt, Trans);
-        log.debug('-提示词翻译为:', tmpNegPrompt);
+        tmpPrompt = await promptHandle(ctx, session, config, tmpPrompt, Trans);
+        tmpNegPrompt = await promptHandle(ctx, session, config, tmpNegPrompt, Trans);
+
         // 确定位置
         let { prompt, negativePrompt } = config.IMG;
         if (!noPosTags) if (prePrompt) {
@@ -205,7 +215,8 @@ export async function apply(ctx: Context, config: Config) {
           tmpNegPrompt = negativePrompt;
         }
         else tmpNegPrompt += negativePrompt;
-        log.debug('+提示词:', prompt, '\n-提示词:', negativePrompt);
+        log.debug('+提示词处理结果:', prompt);
+        log.debug('-提示词处理结果:', negativePrompt);
 
         // 使用 ADetailer
         let payload2 = {};
@@ -219,8 +230,8 @@ export async function apply(ctx: Context, config: Config) {
           await Promise.all(config.AD.ADetailer.models.map(async model => {
             log.debug('处理ADetailer参数...');
             // ADetailer翻译
-            let ADPrompt = await promptHandle(ctx, config, model.prompt, Trans);
-            let ADNegPrompt = await promptHandle(ctx, config, model.negativePrompt, Trans);
+            let ADPrompt = await promptHandle(ctx, session, config, model.prompt, Trans);
+            let ADNegPrompt = await promptHandle(ctx, session, config, model.negativePrompt, Trans);
 
             const tmpPayload = {
               ad_model: model.name,
@@ -326,7 +337,9 @@ export async function apply(ctx: Context, config: Config) {
           } catch (error) {
             log.error('生成图片出错:', error);
             if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
-            return `生成图片出错: ${error.message}`;
+            return `生成图片出错: ${error.message}`.replace(/https?:\/\/[^/]+/g, (url) => {
+              return url.replace(/\/\/[^/]+/, '//***');
+            });
           }
         }
 
@@ -367,7 +380,13 @@ export async function apply(ctx: Context, config: Config) {
         }
 
         let endpoint = selectServer();
-        if (options?.server) endpoint = servers[options.server];;
+        if (options?.server)
+          if (options.server < servers.length)
+            endpoint = servers[options.server];
+          else {
+            endpoint = servers[0];
+            session.send('不存在该序列节点，自动选择0号节点')
+          }
 
         // 获取图片
         log.debug('获取图片');
@@ -426,7 +445,9 @@ export async function apply(ctx: Context, config: Config) {
         return `${response}`;
       } catch (error) {
         log.error('错误:', error.detail);
-        return `错误: ${error.message}`;
+        return `错误: ${error.message}`.replace(/https?:\/\/[^/]+/g, (url) => {
+          return url.replace(/\/\/[^/]+/, '//***');
+        });
       }
     });
 
@@ -573,7 +594,9 @@ export async function apply(ctx: Context, config: Config) {
 
       } catch (error) {
         log.error('查询模型时出错:', error);
-        return `查询模型时出错: ${error.message}`;
+        return `查询模型时出错: ${error.message}`.replace(/https?:\/\/[^/]+/g, (url) => {
+          return url.replace(/\/\/[^/]+/, '//***');
+        });
       }
     });
 
@@ -604,7 +627,9 @@ export async function apply(ctx: Context, config: Config) {
               if (error.response?.status === 422) {
                 return '配置数据验证错误，请检查提供的数据格式。';
               }
-              return `设置配置时出错: ${error.message}`;
+              return `设置配置时出错: ${error.message}`.replace(/https?:\/\/[^/]+/g, (url) => {
+                return url.replace(/\/\/[^/]+/, '//***');
+              });;
             }
           }
 
@@ -620,4 +645,23 @@ export async function apply(ctx: Context, config: Config) {
     });
 
 
+  // 列出可用的基础设置
+  ctx.command('sd').subcommand('sdlist [s1s2s3s4s5]', '查询服务器、采样器、调度器、AD模型、WD模型列表')
+    .action(({ }, s1s2s3s4s5) => {
+      switch (s1s2s3s4s5) {
+        case 's1':
+          return `服务器列表:\n${servers.map((_, index) => `服务器 ${index}`).join('、')}`;
+        case 's2':
+          return `采样器列表:\n${samplerL.join('\n')}`;
+        case 's3':
+          return `调度器列表:\n${schedulerL.join('\n')}`;
+        case 's4':
+          return `AD模型列表:\n${ad_modelL.join('\n')}`;
+        case 's5':
+          return `WD模型列表:\n${wd_modelL.join('\n')}`;
+        default:
+          return '请选择s1/s2/s3/s4/s5';
+      }
+
+    })
 }
