@@ -1,11 +1,11 @@
-import { Context, h, HTTP, Random, Session } from 'koishi';
+import { Context, Database, h, HTTP, Random, Session } from 'koishi';
 import { promptHandle } from './utils'
 import { Config, log } from './config';
 
 export const name = 'sd-webui-api';
 export const inject = {
   required: ['http'],
-  optional: ['translator']
+  optional: ['translator', 'monetary']
 }
 export * from './config'
 
@@ -22,13 +22,13 @@ export const usage = `
 
 // 插件主函数
 export async function apply(ctx: Context, config: Config) {
-  ctx.on('message-created', (session: Session) => {
-    log.debug(JSON.stringify(session, null, 2))
-    log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
-  }, true)
+  // ctx.on('message-created', (session: Session) => {
+  //   log.debug(JSON.stringify(session, null, 2))
+  //   log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
+  // }, true)
 
   const { endpoint, useTranslation: useTrans, outputMethod: outMeth, maxTasks } = config;
-  const imgCensor = config.WD.imgCensor;
+  const imgCensor = config.WD.imgCensor.enable;
   const header1 = {
     'accept': 'application/json',
     'Content-Type': 'application/json',
@@ -43,7 +43,8 @@ export async function apply(ctx: Context, config: Config) {
   // 调用 Interrogateapi
   async function wdProcess(session: Session, image: string, cmd: boolean, options?: any): Promise<boolean | string> {
     let wdResult = false;
-    const { tagger, threshold, indicators, score } = config.WD
+    const { tagger, threshold } = config.WD;
+    const { indicators, score } = config.WD.imgCensor;
 
     const payload = {
       image: image,
@@ -152,16 +153,16 @@ export async function apply(ctx: Context, config: Config) {
         const schName = options?.scheduler || scheduler;
         const noPosTags = options?.noPositiveTags;
         const noNegTags = options?.noNegativeTags;
-        const Tans = options?.noTranslate || useTrans;
+        const Trans = options?.noTranslate || useTrans;
         const modelName = options?.model;
         const vaeName = options?.vae;
 
         // 翻译
         let tmpPrompt = _;
         let tmpNegPrompt = options?.negative;
-        tmpPrompt = await promptHandle(ctx, config, tmpPrompt, Tans);
+        tmpPrompt = await promptHandle(ctx, config, tmpPrompt, Trans);
         log.debug('+提示词翻译为:', tmpPrompt);
-        tmpNegPrompt = await promptHandle(ctx, config, tmpNegPrompt, Tans);
+        tmpNegPrompt = await promptHandle(ctx, config, tmpNegPrompt, Trans);
         log.debug('-提示词翻译为:', tmpNegPrompt);
         // 确定位置
         let { prompt, negativePrompt } = config.IMG;
@@ -179,7 +180,7 @@ export async function apply(ctx: Context, config: Config) {
         log.debug('+提示词:', prompt, '\n-提示词:', negativePrompt);
 
         // 使用 ADetailer
-        const adEnable = config.AD.enable;
+        const adEnable = config.AD.ADetailer.enable;
         let payload2 = {};
 
         if (!options?.noAdetailer && adEnable) {
@@ -188,11 +189,11 @@ export async function apply(ctx: Context, config: Config) {
             false, // true，直接使用原图
           ];
 
-          await Promise.all(config.AD.models.map(async model => {
+          await Promise.all(config.AD.ADetailer.models.map(async model => {
             log.debug('处理ADetailer参数...');
             // ADetailer翻译
-            let ADPrompt = await promptHandle(ctx, config, model.prompt, Tans);
-            let ADNegPrompt = await promptHandle(ctx, config, model.negativePrompt, Tans);
+            let ADPrompt = await promptHandle(ctx, config, model.prompt, Trans);
+            let ADNegPrompt = await promptHandle(ctx, config, model.negativePrompt, Trans);
 
             const tmpPayload = {
               ad_model: model.name,
@@ -272,7 +273,7 @@ export async function apply(ctx: Context, config: Config) {
             }
             log.debug('绘画API响应状态:', response.statusText);
             let image = response.data.images[0];
-            // log.debug(image); // 开发其他平台时做参考
+            log.debug(image); // 开发其他平台时做参考
 
             if (outMeth === '关键信息') {
               session.send(`步数:${steps}\n尺寸:${size}\n服从度:${cfg}\n采样器:${smpName}\n调度器:${schName}`);

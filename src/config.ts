@@ -19,22 +19,31 @@ export interface Config {
     preNegPrompt: boolean; // 负向提示词是否前置
     restoreFaces: boolean; // 是否使用人脸修复
     hiresFix: boolean; // 是否使用高分辨率修复
+    monetary: {
+      enable?: boolean;
+      sd?: number;  // 绘画收费
+      wd?: number;  // 反推收费
+    }; // 启用经济系统
   };
   AD: {
-    enable: boolean; // 默认开启
-    models: {
-      name: string;  // 模型选项
-      prompt: string; // 正向提示词
-      negativePrompt: string; // 负向提示词
-      confidence: number; // 检测置信度
-    }[];
+    ADetailer: {
+      enable?: boolean; // 默认开启
+      models?: {
+        name: string;  // 模型选项
+        prompt: string; // 正向提示词
+        negativePrompt: string; // 负向提示词
+        confidence: number; // 检测置信度
+      }[];
+    };
   };
   WD: {
     tagger: string; // 图像反推模型
     threshold: number; // 提示词输出置信度
-    imgCensor: boolean; // 用于图像审核
-    indicators: string[]; // 评估指标
-    score: number; // 阈值
+    imgCensor: {
+      enable?: boolean; // 用于图像审核
+      indicators?: string[]; // 评估指标
+      score?: number; // 阈值
+    }
   };
   outputMethod: string;  // 输出方式
   maxPrompt: number;  //最大提示词数
@@ -44,7 +53,6 @@ export interface Config {
   maxTasks: number; // 最大任务数
 }
 
-// 配置约束
 export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
     endpoint: Schema.string().default('http://127.0.0.1:7860').description('SD-WebUI API的网络地址'),
@@ -95,31 +103,54 @@ export const Config: Schema<Config> = Schema.intersect([
       preNegPrompt: Schema.boolean().default(true).description('默认负向提示词是否放在最前面'),
       restoreFaces: Schema.boolean().default(false).description('是否启用人脸修复').disabled(),
       hiresFix: Schema.boolean().default(false).description('是否启用高分辨率修复').disabled(),
+      monetary: Schema.intersect([
+        Schema.object({
+          enable: Schema.boolean().default(false).description('是否启用经济系统'),
+        }),
+        Schema.union([
+          Schema.object({
+            enable: Schema.const(true).required(),
+            sd: Schema.number().min(0).max(200).step(1).role('slider').default(20).description('绘画启用经济，设置为0关闭'),
+            wd: Schema.number().min(0).max(200).step(1).role('slider').default(10).description('反推启用经济，设置为0关闭'),
+          }),
+          Schema.object({})
+        ]),
+      ]),
     }).collapse(),
   }).description('绘画设置'),
   Schema.object({
     AD: Schema.object({
-      enable: Schema.boolean().default(false).description('使用ADetailer修复'),
-      models: Schema.array(
+      ADetailer: Schema.intersect([
         Schema.object({
-          name: Schema.union([
-            'face_yolov8n.pt',
-            'face_yolov8s.pt',
-            'hand_yolov8n.pt',
-            'person_yolov8nseg.pt',
-            'person_yolov8s-seg.pt',
-            'yolov8x-worldv2.pt',
-            'mediapipe_face_full',
-            'mediapipe_face_short',
-            'mediapipe_face_mesh',
-            'mediapipe face mesh eyes only',
-            Schema.string().default('None').description('自定义模型 <填入名称>'),
-          ]).default('自定义模型').description('模型选择'),
-          prompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认正向提示词，不输入时使用绘画提示词'),
-          negativePrompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认负向提示词，使用方法同上'),
-          confidence: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.3).description('识别对象的置信度'),
-        })
-      )
+          enable: Schema.boolean().default(false).description('使用ADetailer修复'),
+        }),
+        Schema.union([
+          Schema.object({
+            enable: Schema.const(true).required(),
+            models: Schema.array(
+              Schema.object({
+                name: Schema.union([
+                  'face_yolov8n.pt',
+                  'face_yolov8s.pt',
+                  'hand_yolov8n.pt',
+                  'person_yolov8nseg.pt',
+                  'person_yolov8s-seg.pt',
+                  'yolov8x-worldv2.pt',
+                  'mediapipe_face_full',
+                  'mediapipe_face_short',
+                  'mediapipe_face_mesh',
+                  'mediapipe face mesh eyes only',
+                  Schema.string().default('None').description('自定义模型 <填入名称>'),
+                ]).default('自定义模型').description('模型选择'),
+                prompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认正向提示词，不输入时使用绘画提示词'),
+                negativePrompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认负向提示词，使用方法同上'),
+                confidence: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.3).description('识别对象的置信度'),
+              }),
+            ),
+          }),
+          Schema.object({}),
+        ]),
+      ]),
     }).collapse(),
   }).description('修复设置'),
   Schema.object({
@@ -141,9 +172,19 @@ export const Config: Schema<Config> = Schema.intersect([
         'wd14-vit-v2-git',
       ]).default('wd14-vit-v2-git').description('反推模型选择'),
       threshold: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.3).description('输出提示词的置信度'),
-      imgCensor: Schema.boolean().default(false).description('是否用于审核图片'),
-      indicators: Schema.array(Schema.union(['sensitive', 'questionable', 'explicit'])).default(['sensitive', 'questionable', 'explicit']).description('选择评估指标').role('checkbox'),
-      score: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.8).description('判定敏感图阈值')
+      imgCensor: Schema.intersect([
+        Schema.object({
+          enable: Schema.boolean().default(false).description('是否用于审核图片'),
+        }),
+        Schema.union([
+          Schema.object({
+            enable: Schema.const(true).required(),
+            indicators: Schema.array(Schema.union(['sensitive', 'questionable', 'explicit'])).default(['sensitive', 'questionable', 'explicit']).description('选择评估指标').role('checkbox'),
+            score: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.8).description('判定敏感图阈值')
+          }),
+          Schema.object({}),
+        ]),
+      ]),
     }).collapse(),
   }).description('图生词设置'),
   Schema.object({
@@ -164,4 +205,4 @@ export const Config: Schema<Config> = Schema.intersect([
     useTranslation: Schema.boolean().default(false).description('是否启用翻译服务处理非英文提示词'),
     maxTasks: Schema.number().min(0).default(3).description('最大任务数限制，设置为0关闭'),
   }).description('拓展功能'),
-]);
+])
