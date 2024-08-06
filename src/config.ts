@@ -3,7 +3,7 @@ import { Schema, Logger } from 'koishi';
 export const log = new Logger('sd-webui-api');
 
 export interface Config {
-  endpoint: string; // API端点
+  endpoint: string[]; // API端点
   IMG: {
     save: boolean; // 是否保存到本地
     sampler: string; // 采样器选项
@@ -19,11 +19,6 @@ export interface Config {
     preNegPrompt: boolean; // 负向提示词是否前置
     restoreFaces: boolean; // 是否使用人脸修复
     hiresFix: boolean; // 是否使用高分辨率修复
-    monetary: {
-      enable?: boolean;
-      sd?: number;  // 绘画收费
-      wd?: number;  // 反推收费
-    }; // 启用经济系统
   };
   AD: {
     ADetailer: {
@@ -51,11 +46,16 @@ export interface Config {
   setConfig: boolean; // 指令修改SD全局设置
   useTranslation: boolean; // 是否使用翻译服务
   maxTasks: number; // 最大任务数
+  monetary: {
+    enable?: boolean;
+    sd?: number;  // 绘画收费
+    wd?: number;  // 反推收费
+  }; // 启用经济系统
 }
 
 export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
-    endpoint: Schema.string().default('http://127.0.0.1:7860').description('SD-WebUI API的网络地址'),
+    endpoint: Schema.array(String).role('table').description('SD-WebUI API的地址，可以填多个'),
   }).description('基础设置'),
   Schema.object({
     IMG: Schema.object({
@@ -103,19 +103,6 @@ export const Config: Schema<Config> = Schema.intersect([
       preNegPrompt: Schema.boolean().default(true).description('默认负向提示词是否放在最前面'),
       restoreFaces: Schema.boolean().default(false).description('是否启用人脸修复').disabled(),
       hiresFix: Schema.boolean().default(false).description('是否启用高分辨率修复').disabled(),
-      monetary: Schema.intersect([
-        Schema.object({
-          enable: Schema.boolean().default(false).description('是否启用经济系统'),
-        }),
-        Schema.union([
-          Schema.object({
-            enable: Schema.const(true).required(),
-            sd: Schema.number().min(0).max(200).step(1).role('slider').default(20).description('绘画启用经济，设置为0关闭'),
-            wd: Schema.number().min(0).max(200).step(1).role('slider').default(10).description('反推启用经济，设置为0关闭'),
-          }),
-          Schema.object({})
-        ]),
-      ]),
     }).collapse(),
   }).description('绘画设置'),
   Schema.object({
@@ -204,5 +191,18 @@ export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
     useTranslation: Schema.boolean().default(false).description('是否启用翻译服务处理非英文提示词'),
     maxTasks: Schema.number().min(0).default(3).description('最大任务数限制，设置为0关闭'),
+    monetary: Schema.intersect([
+      Schema.object({
+        enable: Schema.boolean().default(false).description('是否启用经济系统'),
+      }),
+      Schema.union([
+        Schema.object({
+          enable: Schema.const(true).required(),
+          sd: Schema.number().min(0).max(200).step(1).role('slider').default(20).description('绘画启用经济，设置为0关闭'),
+          wd: Schema.number().min(0).max(200).step(1).role('slider').default(10).description('反推启用经济，设置为0关闭'),
+        }),
+        Schema.object({})
+      ]),
+    ]),
   }).description('拓展功能'),
 ])

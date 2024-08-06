@@ -1,11 +1,12 @@
-import { Context, Database, h, HTTP, Random, Session } from 'koishi';
+import { Context, h, HTTP, Random, Session } from 'koishi';
+import { } from 'koishi-plugin-monetary'
 import { promptHandle } from './utils'
 import { Config, log } from './config';
 
 export const name = 'sd-webui-api';
 export const inject = {
   required: ['http'],
-  optional: ['translator', 'monetary']
+  optional: ['translator', 'database', 'monetary']
 }
 export * from './config'
 
@@ -20,6 +21,14 @@ export const usage = `
 2. 默认使用的是秋葉整合包
 `;
 
+// declare module 'koishi' {
+//   interface monetary {
+//     uid: number,
+//     currency: string,
+//     value: number
+//   }
+// }
+
 // 插件主函数
 export async function apply(ctx: Context, config: Config) {
   // ctx.on('message-created', (session: Session) => {
@@ -27,8 +36,9 @@ export async function apply(ctx: Context, config: Config) {
   //   log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
   // }, true)
 
-  const { endpoint, useTranslation: useTrans, outputMethod: outMeth, maxTasks } = config;
+  const { useTranslation: useTrans, outputMethod: outMeth, maxTasks } = config;
   const imgCensor = config.WD.imgCensor.enable;
+  const monetary = config.monetary.enable;
   const header1 = {
     'accept': 'application/json',
     'Content-Type': 'application/json',
@@ -38,10 +48,18 @@ export async function apply(ctx: Context, config: Config) {
   };
 
   let taskNum = 0;
+  const servers = config.endpoint;
+
+  // 简单轮询
+  function selectServer() {
+    const index = taskNum % servers.length;
+    log.debug(`选择服务器: ${index}号: ${servers[index]}`);
+    return servers[index];
+  }
 
 
   // 调用 Interrogateapi
-  async function wdProcess(session: Session, image: string, cmd: boolean, options?: any): Promise<boolean | string> {
+  async function wdProcess(session: Session, image: string, cmd: boolean, options?: any, endpoint?: string): Promise<boolean | string> {
     let wdResult = false;
     const { tagger, threshold } = config.WD;
     const { indicators, score } = config.WD.imgCensor;
@@ -112,6 +130,7 @@ export async function apply(ctx: Context, config: Config) {
     .option('seed', '-se <number> 随机种子')
     .option('sampler', '-sa <name> 采样器')
     .option('scheduler', '-sc <name> 调度器')
+    .option('server', '-ser <number> 指定服务器编号')
     .option('noPositiveTags', '-P 禁用默认正向提示词')
     .option('noNegativeTags', '-N 禁用默认负向提示词')
     // .option('hiresFix', '-H 禁用高分辨率修复')
@@ -125,14 +144,30 @@ export async function apply(ctx: Context, config: Config) {
         log.debug('调用绘图 API');
         log.debug('选择子选项:', options);
 
+        const sdMonetary = config.monetary.sd;
+        let userAid: number;
+        if (monetary && sdMonetary) {
+          userAid = (await ctx.database.get('binding', { pid: [session.userId] }, ['aid']))[0]?.aid;
+          let balance = (await ctx.database.get('monetary', { uid: userAid }, ['value']))[0]?.value;
+          if (balance < sdMonetary || balance === undefined || !ctx.monetary) {
+            ctx.monetary.gain(userAid, 0);
+            return '当前余额不足，请联系管理员充值VIP /doge/doge'
+          }
+        }
+
         // 从config对象中读取配置
         const { save, imgSize, sampler, scheduler, cfgScale, txt2imgSteps: t2iSteps, img2imgSteps: i2iSteps, maxSteps, prePrompt, preNegPrompt, hiresFix, restoreFaces: resFaces } = config.IMG;
+        const adEnable = config.AD.ADetailer.enable;
+
+        // 选择服务器
+        let endpoint = selectServer();
+        if (options?.server) endpoint = servers[options.server];
 
         // 图生图
         let initImages = options?.img2img;
         if (options.hasOwnProperty('img2img')) {
           log.debug('获取图片...');
-          const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
+          const hasProtocol = (imgUrl: string): boolean => /^(https?:\/\/)/i.test(imgUrl);
           if (!hasProtocol(initImages)) {
             if (session.platform === 'onebot')
               initImages = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
@@ -180,7 +215,6 @@ export async function apply(ctx: Context, config: Config) {
         log.debug('+提示词:', prompt, '\n-提示词:', negativePrompt);
 
         // 使用 ADetailer
-        const adEnable = config.AD.ADetailer.enable;
         let payload2 = {};
 
         if (!options?.noAdetailer && adEnable) {
@@ -273,19 +307,21 @@ export async function apply(ctx: Context, config: Config) {
             }
             log.debug('绘画API响应状态:', response.statusText);
             let image = response.data.images[0];
-            log.debug(image); // 开发其他平台时做参考
+            // log.debug(image); // 开发其他平台时做参考
 
             if (outMeth === '关键信息') {
+              session.send(`使用 ${servers.indexOf(endpoint)}号 服务器`);
               session.send(`步数:${steps}\n尺寸:${size}\n服从度:${cfg}\n采样器:${smpName}\n调度器:${schName}`);
-              session.send(`正向提示词:\n${prompt}`);
-              if (options?.negative !== undefined) session.send(`负向提示词:\n${negativePrompt}`);
+              if (_ !== '') session.send(`正向提示词:\n${prompt}`);
+              if (options?.negative !== '') session.send(`负向提示词:\n${negativePrompt}`);
             } else if (outMeth === '详细信息') {
+              session.send(`使用 ${servers.indexOf(endpoint)}号 服务器`);
               session.send(JSON.stringify(payload, null, 4))
             }
 
             if (imgCensor) {
               session.send('进入审核阶段...');
-              let censorResult = await wdProcess(session, image, false);
+              let censorResult = await wdProcess(session, image, false, endpoint);
               log.debug('是否过审:', !censorResult);
               if (censorResult) {
                 session.send('图片违规');
@@ -304,6 +340,7 @@ export async function apply(ctx: Context, config: Config) {
         taskNum++;
         session.send(await process());
         taskNum--;
+        if (monetary && sdMonetary) ctx.monetary.cost(userAid, sdMonetary);
       } else {
         // 超过最大任务数的处理逻辑
         session.send(Random.pick([
@@ -319,15 +356,30 @@ export async function apply(ctx: Context, config: Config) {
   ctx.command('sd').subcommand('sdtag [imgURL]', '图片生成提示词')
     .option('model', '-m <model_name> 使用的模型')
     .option('threshold', '-t <number> 提示词输出置信度')
+    .option('server', '-ser <number> 指定服务器编号')
     .action(async ({ options, session }, _) => {
       if (!maxTasks || taskNum < maxTasks) {
         log.debug('调用反推 API');
         log.debug('选择子选项:', options);
 
+        const wdMonetary = config.monetary.wd;
+        let userAid: number;
+        if (monetary && wdMonetary) {
+          userAid = (await ctx.database.get('binding', { pid: [session.userId] }, ['aid']))[0]?.aid;
+          const balance = (await ctx.database.get('monetary', { uid: userAid }, ['value']))[0]?.value;
+          if (balance < wdMonetary || balance === undefined || !ctx.monetary) {
+            ctx.monetary.gain(userAid, 0);
+            return '当前余额不足，请联系管理员充值VIP /doge/doge'
+          }
+        }
+
+        let endpoint = selectServer();
+        if (options?.server) endpoint = servers[options.server];;
+
         // 获取图片
         log.debug('获取图片');
 
-        const hasProtocol = (url: string): boolean => /^(https?:\/\/)/i.test(url);
+        const hasProtocol = (imgUrl: string): boolean => /^(https?:\/\/)/i.test(imgUrl);
         if (!hasProtocol(_)) {
           if (session.platform === 'onebot')
             _ = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
@@ -349,8 +401,9 @@ export async function apply(ctx: Context, config: Config) {
         }
 
         taskNum++;
-        session.send(await wdProcess(session, _, true, options) as string);
+        session.send(await wdProcess(session, _, true, options, endpoint) as string);
         taskNum--;
+        if (monetary && wdMonetary) ctx.monetary.cost(userAid, wdMonetary);
       } else {
         session.send(Random.pick([
           '这个任务有点难，我不想接>_<',
@@ -362,10 +415,13 @@ export async function apply(ctx: Context, config: Config) {
 
 
   // 注册 Interruptapi 指令
-  ctx.command('sd').subcommand('sdstop', '中断当前操作')
-    .action(async () => {
+  ctx.command('sd').subcommand('sdstop <server_number:number>', '中断当前操作')
+    .action(async ({ }, server_number) => {
+      if (!server_number) return '请指定服务器编号';
       try {
         log.debug('调用中断 API');
+
+        const endpoint = servers[server_number];
 
         // 调用 Interruptapi
         const response = await ctx.http('post', `${endpoint}/sdapi/v1/interrupt`, {
@@ -383,7 +439,7 @@ export async function apply(ctx: Context, config: Config) {
 
 
   // 注册 GetModels 指令
-  ctx.command('sd').subcommand('sdmodel [sd_name] [vae_name]', '查询和切换模型')
+  ctx.command('sd').subcommand('sdmodel <server_number:number> [sd_name] [vae_name]', '查询和切换模型')
     .usage('输入名称时为切换模型，缺失时为查询模型')
     .option('sd', '-s 查询/切换SD模型')
     .option('vae', '-v 查询/切换Vae模型')
@@ -391,13 +447,17 @@ export async function apply(ctx: Context, config: Config) {
     .option('hybridnetwork', '-n 查询可用的超网络模型')
     .option('lora', '-l 查询可用的loras模型')
     .option('wd', '-w 查询可用的WD模型')
-    .action(async ({ session, options }, _1, _2) => {
+    .option('server', '-ser <number> 指定服务器编号')
+    .action(async ({ session, options }, server_number, _1?, _2?) => {
       log.debug('选择子选项', options)
 
       if (!Object.keys(options).length) {
         log.debug('没有选择子选项，退回');
         return '请选择指令的选项！';
       }
+
+      const endpoint = servers[server_number];
+
       const sdName = _1;
       const vaeName = _2;
       const sd = options?.sd;
@@ -526,13 +586,16 @@ export async function apply(ctx: Context, config: Config) {
 
 
   // 注册 Set Config 指令
-  ctx.command('sd').subcommand('sdset <configData>', '修改SD全局设置', {
+  ctx.command('sd').subcommand('sdset <server_number:number> <configData>', '修改SD全局设置', {
     checkUnknown: true,
     checkArgCount: true
   })
-    .action(async ({ session }, configData) => {
+    .action(async ({ session }, server_number, configData) => {
       if (config.setConfig) {
         if (taskNum === 0) {
+
+          const endpoint = servers[server_number];
+
           async function process() {
             try {
               log.debug('调用修改设置 API');
