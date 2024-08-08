@@ -20,19 +20,24 @@ export const usage = `
 ### 注意事项
 1. 子指令只能直接调用
 2. 默认使用的是秋葉整合包
+3. 翻译服务默认百度翻译
 `;
 
-
 // 插件主函数
-export async function apply(ctx: Context, config: Config) {
+export function apply(ctx: Context, config: Config) {
   // ctx.on('message-created', (session: Session) => {
   //   log.debug(JSON.stringify(session, null, 2))
   //   log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
   // }, true)
 
-  const { useTranslation: useTrans, outputMethod: outMeth, maxTasks } = config;
+  ctx.middleware((session, next) => {
+    if (config.closingMode.enable) return config.closingMode.tips;
+    else return next();
+  }, true /* true 表示这是前置中间件 */)
+
+  const { timeOut, outputMethod: outMeth, maxTasks } = config;
   const { sampler, scheduler } = config.IMG;
-  const imgCensor = config.WD.imgCensor.enable;
+  const useTrans = config.useTranslation.enable;
   const monetary = config.monetary.enable;
   const header1 = {
     'accept': 'application/json',
@@ -67,6 +72,7 @@ export async function apply(ctx: Context, config: Config) {
     // log.debug('API请求体:', payload);
     try {
       const response = await ctx.http('post', `${endpoint}/tagger/v1/interrogate`, {
+        timeout: timeOut,
         headers: header1,
         data: payload
       });
@@ -119,10 +125,10 @@ export async function apply(ctx: Context, config: Config) {
 
 
   // 注册 text2img/img2img 指令
-  ctx.command('sd [tags]', 'AI画图，如果提示词有空格，首尾用引号括起来')
-    .option('negative', '-n <tags> 负向提示词，如果有空格，首尾用引号括起来')
-    .option('img2img', '-i [imgURL] 图生图，@图片或输入链接')
-    .option('steps', '-s <number> 采样步数')
+  ctx.command('sd [tags]', 'AI画图，若提示词有空格，首尾用引号括起来')
+    .option('negative', '-n <tags> 负向提示词，若有空格，首尾用引号括起来')
+    .option('img2img', '-i [imgURL] 图生图，@图片或输入链接，放在参数末尾')
+    .option('steps', '-s <number> 迭代步数')
     .option('cfgScale', '-c <float> 提示词服从度')
     .option('size', '-z <宽x高> 图像尺寸')
     .option('seed', '-e <number> 随机种子')
@@ -133,8 +139,8 @@ export async function apply(ctx: Context, config: Config) {
     .option('noNegativeTags', '-N 禁用默认负向提示词')
     // .option('hiresFix', '-H 禁用高分辨率修复')
     // .option('restoreFaces', '-R 禁用人脸修复')
-    .option('noAdetailer', '-A 禁用修复器')
-    .option('noTranslate', '-T 禁止使用翻译服务')
+    .option('noAdetailer', '-A 禁用Adetailer')
+    .option('noTranslate', '-T 禁用翻译')
     .option('model', '-m <model_name> 单次切换SD模型')
     .option('vae', '-v <vae_name> 单次切换Vae模型')
     .action(async ({ options, session }, _) => {
@@ -204,19 +210,16 @@ export async function apply(ctx: Context, config: Config) {
 
         // 确定位置
         let { prompt, negativePrompt } = config.IMG;
-        if (!noPosTags) if (prePrompt) {
+        if (!noPosTags && prompt) if (prePrompt && prompt) {
           prompt += tmpPrompt;
           tmpPrompt = prompt;
-        }
-        else tmpPrompt += prompt;
-
-        if (!noNegTags) if (preNegPrompt) {
+        } else tmpPrompt += prompt;
+        if (!noNegTags && negativePrompt) if (preNegPrompt) {
           negativePrompt += tmpNegPrompt;
           tmpNegPrompt = negativePrompt;
-        }
-        else tmpNegPrompt += negativePrompt;
-        log.debug('+提示词处理结果:', prompt);
-        log.debug('-提示词处理结果:', negativePrompt);
+        } else tmpNegPrompt += negativePrompt;
+        log.debug('+提示词处理结果:', tmpPrompt);
+        log.debug('-提示词处理结果:', tmpNegPrompt);
 
         // 使用 ADetailer
         let payload2 = {};
@@ -323,7 +326,7 @@ export async function apply(ctx: Context, config: Config) {
               session.send(JSON.stringify(payload, null, 4))
             }
 
-            if (imgCensor) {
+            if (config.WD.imgCensor.enable) {
               session.send('进入审核阶段...');
               let censorResult = await wdProcess(session, image, false, undefined, endpoint);
               log.debug('是否过审:', !censorResult);
@@ -662,6 +665,6 @@ export async function apply(ctx: Context, config: Config) {
         default:
           return '请选择s1/s2/s3/s4/s5';
       }
-
     })
+
 }

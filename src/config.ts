@@ -5,6 +5,7 @@ export const log = new Logger('sd-webui-api');
 
 export interface Config {
   endpoint: string[]; // API端点
+  timeOut: number;
   IMG: {
     save: boolean; // 是否保存到本地
     sampler: string; // 采样器选项
@@ -45,18 +46,26 @@ export interface Config {
   maxPrompt: number;  //最大提示词数
   excessHandle: string;  //提示词超限处理方式{
   setConfig: boolean; // 指令修改SD全局设置
-  useTranslation: boolean; // 是否使用翻译服务
+  useTranslation: {
+    enable?: boolean; // 是否使用翻译服务
+    pronounCorrect?: boolean; //修正翻译后代词
+  };
   maxTasks: number; // 最大任务数
   monetary: {
     enable?: boolean;
     sd?: number;  // 绘画收费
     wd?: number;  // 反推收费
   }; // 启用经济系统
+  closingMode: {
+    enable?: boolean;
+    tips?: string;
+  };
 }
 
 export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
-    endpoint: Schema.array(String).role('table').description('SD-WebUI API的地址，可以填多个'),
+    endpoint: Schema.array(String).role('table').description('SD-WebUI API的地址，可以填多个').experimental(),
+    timeOut: Schema.number().default(60000).description('请求超时，设置为0关闭').experimental(),
   }).description('基础设置'),
   Schema.object({
     IMG: Schema.object({
@@ -111,7 +120,7 @@ export const Config: Schema<Config> = Schema.intersect([
       threshold: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.3).description('输出提示词的置信度'),
       imgCensor: Schema.intersect([
         Schema.object({
-          enable: Schema.boolean().default(false).description('是否用于审核图片'),
+          enable: Schema.boolean().default(false).description('是否用于审核图片').experimental(),
         }),
         Schema.union([
           Schema.object({
@@ -139,7 +148,18 @@ export const Config: Schema<Config> = Schema.intersect([
     setConfig: Schema.boolean().default(false).description('是否启用指令修改SD全局设置'),
   }).description('其他设置'),
   Schema.object({
-    useTranslation: Schema.boolean().default(false).description('是否启用翻译服务处理非英文提示词'),
+    useTranslation: Schema.intersect([
+      Schema.object({
+        enable: Schema.boolean().default(false).description('是否启用翻译服务处理非英文提示词'),
+      }),
+      Schema.union([
+        Schema.object({
+          enable: Schema.const(true).required(),
+          pronounCorrect: Schema.boolean().default(false).description('启用翻译后代词修正').experimental(),
+        }),
+        Schema.object({}),
+      ]),
+    ]),
     maxTasks: Schema.number().min(0).default(3).description('最大任务数限制，设置为0关闭'),
     monetary: Schema.intersect([
       Schema.object({
@@ -150,6 +170,18 @@ export const Config: Schema<Config> = Schema.intersect([
           enable: Schema.const(true).required(),
           sd: Schema.number().min(0).max(200).step(1).role('slider').default(20).description('绘画启用经济，设置为0关闭'),
           wd: Schema.number().min(0).max(200).step(1).role('slider').default(10).description('反推启用经济，设置为0关闭'),
+        }),
+        Schema.object({})
+      ]),
+    ]),
+    closingMode: Schema.intersect([
+      Schema.object({
+        enable: Schema.boolean().default(false).description('开启打烊模式，维护用'),
+      }),
+      Schema.union([
+        Schema.object({
+          enable: Schema.const(true).required(),
+          tips: Schema.string().default('打烊了，稍后再来吧......').description('自定义提示语'),
         }),
         Schema.object({})
       ]),
