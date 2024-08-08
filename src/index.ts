@@ -302,12 +302,14 @@ export function apply(ctx: Context, config: Config) {
             if (initImages) {
               // 调用 img2imgAPI
               response = await ctx.http('post', `${endpoint}/sdapi/v1/img2img`, {
+                timeout: timeOut,
                 headers: header1,
                 data: payload
               });
             } else {
               // 调用 txt2imgAPI
               response = await ctx.http('post', `${endpoint}/sdapi/v1/txt2img`, {
+                timeout: timeOut,
                 headers: header1,
                 data: payload
               });
@@ -619,6 +621,7 @@ export function apply(ctx: Context, config: Config) {
             try {
               log.debug('调用修改设置 API');
               const response = await ctx.http('post', `${endpoint}/sdapi/v1/options`, {
+                timeout: timeOut,
                 data: JSON.parse(configData),
                 headers: { 'Content-Type': 'application/json' },
               });
