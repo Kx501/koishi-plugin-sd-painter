@@ -1,4 +1,4 @@
-import { Context, h, HTTP, Random, Session } from 'koishi';
+import { Context, Dict, h, HTTP, Random, Session } from 'koishi';
 import { } from 'koishi-plugin-monetary'
 import { promptHandle } from './utils'
 import { Config, log } from './config';
@@ -49,78 +49,13 @@ export function apply(ctx: Context, config: Config) {
 
   let taskNum = 0;
   const servers = config.endpoint;
+  const servStr = servers.map((_, index) => `服务器 ${index}`).join('、');
 
   // 简单轮询
   function selectServer() {
     const index = taskNum % servers.length;
     log.debug(`选择服务器: ${index}号: ${servers[index]}`);
     return servers[index];
-  }
-
-
-  // 调用 Interrogateapi
-  async function wdProcess(session: Session, image: string, cmd: boolean, options?: any, endpoint?: string): Promise<boolean | string> {
-    let wdResult = false;
-    const { tagger, threshold } = config.WD;
-    const { indicators, score } = config.WD.imgCensor;
-
-    const payload = {
-      image: image,
-      model: options?.model || tagger,
-      threshold: cmd ? (options?.threshold || threshold) : 1
-    };
-    // log.debug('API请求体:', payload);
-    try {
-      const response = await ctx.http('post', `${endpoint}/tagger/v1/interrogate`, {
-        timeout: timeOut,
-        headers: header1,
-        data: payload
-      });
-      // log.debug('响应结果', response);
-      log.debug('反推API响应状态:', response.statusText);
-      const { general, sensitive, questionable, explicit } = response.data.caption;
-      const result = Object.keys(response.data.caption).slice(4).join(', ');
-
-      const toFixed2 = (num: number) => parseFloat(num.toFixed(4));
-      const [gen, sen, que, exp] = [general, sensitive, questionable, explicit].map(toFixed2);
-
-      if (!cmd) {
-        log.debug('选择指标:', indicators);
-        for (const metric of indicators) {
-          let value = 0;
-          switch (metric) {
-            case "que":
-              value = que;
-              break;
-            case "sen":
-              value = sen;
-              break;
-            case "exp":
-              value = exp;
-              break;
-          }
-          if (value > score) {
-            wdResult = true;
-            log.debug(`指标 ${metric} 不通过审核，其值为 ${value}`);
-            break;
-          }
-        }
-      }
-
-      log.debug(`普通性: ${gen}\n敏感性: ${sen}\n可疑性: ${que}\n暴露性: ${exp}`);
-      if (cmd || outMeth !== '仅图片') {
-        session.send(`普通性: ${gen}\n敏感性: ${sen}\n可疑性: ${que}\n暴露性: ${exp}`);
-      }
-
-      if (cmd) return `反推结果:\n${result}`;
-      else return wdResult;
-    } catch (error) {
-      log.error('反推出错:', error);
-      if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
-      return `反推出错: ${error.message}`.replace(/https?:\/\/[^/]+/g, (url) => {
-        return url.replace(/\/\/[^/]+/, '//***');
-      });
-    }
   }
 
 
@@ -210,16 +145,26 @@ export function apply(ctx: Context, config: Config) {
 
         // 确定位置
         let { prompt, negativePrompt } = config.IMG;
-        if (!noPosTags && prompt) if (prePrompt && prompt) {
-          prompt += tmpPrompt;
-          tmpPrompt = prompt;
-        } else tmpPrompt += prompt;
-        if (!noNegTags && negativePrompt) if (preNegPrompt) {
-          negativePrompt += tmpNegPrompt;
-          tmpNegPrompt = negativePrompt;
-        } else tmpNegPrompt += negativePrompt;
-        log.debug('+提示词处理结果:', tmpPrompt);
-        log.debug('-提示词处理结果:', tmpNegPrompt);
+        if (!noPosTags && prompt) {
+          if (prePrompt && prompt) {
+            if (!prompt.endsWith(',')) prompt += ',';
+            prompt += tmpPrompt;
+            tmpPrompt = prompt;
+          } else {
+            if (!tmpPrompt.endsWith(',')) tmpPrompt += ',';
+            tmpPrompt += prompt;
+          }
+        }
+        if (!noNegTags && negativePrompt) {
+          if (preNegPrompt) {
+            if (!negativePrompt.endsWith(',')) negativePrompt += ',';
+            negativePrompt += tmpNegPrompt;
+            tmpNegPrompt = negativePrompt;
+          } else {
+            if (!tmpNegPrompt.endsWith(',')) tmpNegPrompt += ',';
+            tmpNegPrompt += negativePrompt;
+          }
+        }
 
         // 使用 ADetailer
         let payload2 = {};
@@ -318,27 +263,37 @@ export function apply(ctx: Context, config: Config) {
             let image = response.data.images[0];
             // log.debug(image); // 开发其他平台时做参考
 
-            if (outMeth === '关键信息') {
-              session.send(`使用 ${servers.indexOf(endpoint)}号 服务器`);
-              session.send(`步数:${steps}\n尺寸:${size}\n服从度:${cfg}\n采样器:${smpName}\n调度器:${schName}`);
-              if (_ !== '') session.send(`正向提示词:\n${prompt}`);
-              if (options?.negative !== '') session.send(`负向提示词:\n${negativePrompt}`);
-            } else if (outMeth === '详细信息') {
-              session.send(`使用 ${servers.indexOf(endpoint)}号 服务器`);
-              session.send(JSON.stringify(payload, null, 4))
-            }
+            // 聊天记录
+            const attrs: Dict<any, string> = {
+              userId: session.userId,
+              nickname: session.author?.nick || session.username,
+            };
+            const msgCol = h('figure');
 
-            if (config.WD.imgCensor.enable) {
-              session.send('进入审核阶段...');
-              let censorResult = await wdProcess(session, image, false, undefined, endpoint);
-              log.debug('是否过审:', !censorResult);
-              if (censorResult) {
-                session.send('图片违规');
-                if (outMeth !== '详细信息') return; // 阻止图片输出
-              }
-            }
+            if (outMeth === '关键信息') {
+              msgCol.children.push(h('message', attrs, `使用 ${servers.indexOf(endpoint)}号 服务器`));
+              msgCol.children.push(h('message', attrs, `步数:${steps}\n尺寸:${size}\n服从度:${cfg}\n采样器:${smpName}\n调度器:${schName}`));
+              if (_ !== '') msgCol.children.push(h('message', attrs, `正向提示词:\n${prompt}`));
+              if (options?.negative !== '') msgCol.children.push(h('message', attrs, `负向提示词:\n${negativePrompt}`));
+            } else if (outMeth === '详细信息') msgCol.children.push(h('message', attrs, JSON.stringify(payload, null, 4)));
+
+            // 审核
+            // if (config.WD.imgCensor.enable) {
+            //   session.send('进入审核阶段...');
+            //   let censorResult = await wdProcess(session, image, false, undefined, endpoint);
+            //   log.debug('是否过审:', !censorResult);
+            //   if (censorResult) {
+            //     session.send('图片违规');
+            //     if (outMeth !== '详细信息') return; // 阻止图片输出
+            //   }
+            // }
+
             image = Buffer.from(response.data.images[0], 'base64');
-            return h.img(image, 'image/png');
+            if (outMeth === '仅图片') return h.img(image, 'image/png');
+            else {
+              msgCol.children.push(h.img(image, 'image/png'));
+              return msgCol;
+            }
           } catch (error) {
             log.error('生成图片出错:', error);
             if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
@@ -417,8 +372,54 @@ export function apply(ctx: Context, config: Config) {
           session.send(`在推了在推了，不过前面还有 ${taskNum} 个任务……`)
         }
 
+        // 调用 Interrogateapi
+        async function process() {
+          const { tagger, threshold } = config.WD;
+
+          const payload = {
+            image: _,
+            model: options?.model || tagger,
+            threshold: options?.threshold || threshold
+          };
+          // log.debug('API请求体:', payload);
+          try {
+            const response = await ctx.http('post', `${endpoint}/tagger/v1/interrogate`, {
+              timeout: timeOut,
+              headers: header1,
+              data: payload
+            });
+            // log.debug('响应结果', response);
+            log.debug('反推API响应状态:', response.statusText);
+            const { general, sensitive, questionable, explicit } = response.data.caption;
+            const result = Object.keys(response.data.caption).slice(4).join(', ');
+
+            const toFixed2 = (num: number) => parseFloat(num.toFixed(4));
+            const [gen, sen, que, exp] = [general, sensitive, questionable, explicit].map(toFixed2);
+
+            log.debug(`普通性: ${gen}\n敏感性: ${sen}\n可疑性: ${que}\n暴露性: ${exp}`);
+
+            // 聊天记录
+            const attrs: Dict<any, string> = {
+              userId: session.userId,
+              nickname: session.author?.nick || session.username,
+            };
+            const msgCol = h('figure');
+
+            msgCol.children.push(h('message', attrs, `使用 ${servers.indexOf(endpoint)}号 服务器`));
+            msgCol.children.push(h('message', attrs, `反推结果:\n${result}`));
+
+            return msgCol;
+          } catch (error) {
+            log.error('反推出错:', error);
+            if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
+            return `反推出错: ${error.message}`.replace(/https?:\/\/[^/]+/g, (url) => {
+              return url.replace(/\/\/[^/]+/, '//***');
+            });
+          }
+        }
+
         taskNum++;
-        session.send(await wdProcess(session, _, true, options, endpoint) as string);
+        session.send(await process());
         taskNum--;
         if (monetary && wdMonetary) ctx.monetary.cost(userAid, wdMonetary);
       } else {
@@ -458,16 +459,16 @@ export function apply(ctx: Context, config: Config) {
 
 
   // 注册 GetModels 指令
-  ctx.command('sd').subcommand('sdmodel <server_number:number> [sd_name] [vae_name]', '查询和切换模型')
+  ctx.command('sd').subcommand('sdmodel [sd_name] [vae_name]', '查询和切换模型')
     .usage('输入名称时为切换模型，缺失时为查询模型')
+    .option('server', '-x <number> 指定服务器编号')
     .option('sd', '-s 查询/切换SD模型')
     .option('vae', '-v 查询/切换Vae模型')
     .option('embeddeding', '-e 查询可用的嵌入模型')
     .option('hybridnetwork', '-n 查询可用的超网络模型')
     .option('lora', '-l 查询可用的loras模型')
     .option('wd', '-w 查询可用的WD模型')
-    .option('server', '-x <number> 指定服务器编号')
-    .action(async ({ session, options }, server_number, _1?, _2?) => {
+    .action(async ({ options, session }, _1?, _2?) => {
       log.debug('选择子选项', options)
 
       if (!Object.keys(options).length) {
@@ -475,7 +476,17 @@ export function apply(ctx: Context, config: Config) {
         return '请选择指令的选项！';
       }
 
-      const endpoint = servers[server_number];
+      if (!Object.keys(options).includes('server')) {
+        return `请指定服务器编号，当前可用:\n${servStr}`;
+      }
+
+      // 选择服务器
+      let endpoint = selectServer();
+      if (options.server < servers.length) endpoint = servers[options.server];
+      else {
+        endpoint = servers[0];
+        session.send('不存在该序列节点，自动选择0号节点')
+      }
 
       const sdName = _1;
       const vaeName = _2;
@@ -485,6 +496,13 @@ export function apply(ctx: Context, config: Config) {
       const hybNet = options?.hybridnetwork;
       const lora = options?.lora;
       const wd = options?.wd;
+
+      // 聊天记录
+      const attrs: Dict<any, string> = {
+        userId: session.userId,
+        nickname: session.author?.nick || session.username,
+      };
+      const msgCol = h('figure');
 
       // 提取路径最后一段
       const extractFileName = (path: string) => path.split('\\').pop();
@@ -503,7 +521,10 @@ export function apply(ctx: Context, config: Config) {
             return `模型名称: ${model.model_name}\n文件名: ${fileName}`;
           }).join('\n\n');
 
-          return result || `未找到可用的${sd ? 'SD' : 'SD VAE'}模型。`;
+          if (result) {
+            msgCol.children.push(h('message', attrs, result));
+            return msgCol;
+          } else return `未查询到可用的${sd ? 'SD' : 'SD VAE'}模型。`;
         }
         // 切换
         else if (!maxTasks || taskNum < maxTasks) {
@@ -555,7 +576,10 @@ export function apply(ctx: Context, config: Config) {
           const skippedEmbs = Object.keys(embs.skipped).map(key => `不兼容的嵌入: ${key}`).join('\n');
           const result = `${loadedEmbs}\n\n${skippedEmbs}`;
 
-          return result || '未找到嵌入模型信息。';
+          if (result) {
+            msgCol.children.push(h('message', attrs, result));
+            return msgCol;
+          } else return '未查询到嵌入模型信息。';
         }
 
         if (hybNet) {
@@ -569,7 +593,10 @@ export function apply(ctx: Context, config: Config) {
             return `模型名称: ${hn.model_name}\n文件名: ${filename}`;
           }).join('\n\n');
 
-          return result || '未找到超网络模型信息。';
+          if (result) {
+            msgCol.children.push(h('message', attrs, result));
+            return msgCol;
+          } else return '未查询到超网络模型信息。';
         }
 
         if (lora) {
@@ -583,7 +610,10 @@ export function apply(ctx: Context, config: Config) {
             return `模型名称: ${lora.model_name}\n文件名: ${fileName}`;
           }).join('\n\n');
 
-          return result || '未找到Loras信息。';
+          if (result) {
+            msgCol.children.push(h('message', attrs, result));
+            return msgCol;
+          } else return `未查询到Lora模型信息。`;
         }
 
         if (wd) {
@@ -593,7 +623,10 @@ export function apply(ctx: Context, config: Config) {
           const models = response.data.models;
 
           const result = models.map((modelName: string) => `模型名称: ${modelName}`).join('\n\n');
-          return result || '未找到WD信息。';
+          if (result) {
+            msgCol.children.push(h('message', attrs, result));
+            return msgCol;
+          } else return `未查询到WD模型信息。`;
         }
 
 
@@ -607,15 +640,26 @@ export function apply(ctx: Context, config: Config) {
 
 
   // 注册 Set Config 指令
-  ctx.command('sd').subcommand('sdset <server_number:number> <configData>', '修改SD全局设置', {
+  ctx.command('sd').subcommand('sdset <configData>', '修改SD全局设置', {
     checkUnknown: true,
     checkArgCount: true
   })
-    .action(async ({ session }, server_number, configData) => {
+    .option('server', '-x <number> 指定服务器编号')
+    .action(async ({ options, session }, configData) => {
       if (config.setConfig) {
         if (taskNum === 0) {
 
-          const endpoint = servers[server_number];
+          if (!Object.keys(options).includes('server')) {
+            return `请指定服务器编号，当前可用:\n${servStr}`;
+          }
+
+          // 选择服务器
+          let endpoint = selectServer();
+          if (options.server < servers.length) endpoint = servers[options.server];
+          else {
+            endpoint = servers[0];
+            session.send('不存在该序列节点，自动选择0号节点')
+          }
 
           async function process() {
             try {
@@ -653,10 +697,24 @@ export function apply(ctx: Context, config: Config) {
 
   // 列出可用的基础设置
   ctx.command('sd').subcommand('sdlist [s1s2s3s4s5]', '查询服务器、采样器、调度器、AD模型、WD模型列表')
-    .action(({ }, s1s2s3s4s5) => {
+    .option('server', '-x <number> 指定服务器编号')
+    .action(({ options, session }, s1s2s3s4s5) => {
+
+      if (!Object.keys(options).includes('server')) {
+        return `请指定服务器编号，当前可用:\n${servStr}`;
+      }
+
+      // 选择服务器
+      let endpoint = selectServer();
+      if (options.server < servers.length) endpoint = servers[options.server];
+      else {
+        endpoint = servers[0];
+        session.send('不存在该序列节点，自动选择0号节点')
+      }
+
       switch (s1s2s3s4s5) {
         case 's1':
-          return `服务器列表:\n${servers.map((_, index) => `服务器 ${index}`).join('、')}`;
+          return `服务器列表:\n${servStr}`;
         case 's2':
           return `采样器列表:\n${samplerL.join('\n')}`;
         case 's3':

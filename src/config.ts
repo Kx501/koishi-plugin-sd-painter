@@ -120,7 +120,7 @@ export const Config: Schema<Config> = Schema.intersect([
       threshold: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.3).description('输出提示词的置信度'),
       imgCensor: Schema.intersect([
         Schema.object({
-          enable: Schema.boolean().default(false).description('是否用于审核图片').experimental(),
+          enable: Schema.boolean().default(false).description('是否用于审核图片').experimental().disabled(),
         }),
         Schema.union([
           Schema.object({
