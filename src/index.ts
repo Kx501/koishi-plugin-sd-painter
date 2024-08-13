@@ -39,6 +39,9 @@ export function apply(ctx: Context, config: Config) {
   const { sampler, scheduler } = config.IMG;
   const useTrans = config.useTranslation.enable;
   const monetary = config.monetary.enable;
+  const { enable: censor, endpoint: cEndpoint, labels } = config.censor;
+  const { enable: mask, type: maskType, color, maskShape, maskScale, blurStrength, transitionSpeed } = config.censor.mask;
+
   const header1 = {
     'accept': 'application/json',
     'Content-Type': 'application/json',
@@ -219,7 +222,7 @@ export function apply(ctx: Context, config: Config) {
               ...(vaeName && { sd_vae: vaeName }),
             }
           }),
-          ...(initImages && { init_images: [initImages] }),
+          ...(initImages && { init_images: [initImages] })
         }
 
         const payload = {
@@ -278,15 +281,37 @@ export function apply(ctx: Context, config: Config) {
             } else if (outMeth === '详细信息') msgCol.children.push(h('message', attrs, JSON.stringify(payload, null, 4)));
 
             // 审核
-            // if (config.WD.imgCensor.enable) {
-            //   session.send('进入审核阶段...');
-            //   let censorResult = await wdProcess(session, image, false, undefined, endpoint);
-            //   log.debug('是否过审:', !censorResult);
-            //   if (censorResult) {
-            //     session.send('图片违规');
-            //     if (outMeth !== '详细信息') return; // 阻止图片输出
-            //   }
-            // }
+            if (censor) {
+              const payload3 = {
+                images: [
+                  image
+                ],
+                config: {
+                  mask_type: maskType,
+                  color: color,
+                  mask_shape: maskShape,
+                  mask_scale: maskScale,
+                  blur_strength: blurStrength,
+                  transition_speed: transitionSpeed
+                }
+              }
+              session.send('进入审核阶段...');
+              let response = await ctx.http('POST', cEndpoint, {
+                data: payload3,
+              });
+              // if (response.status == 200) {
+
+              // }
+              // else {
+              //   log.debug('Error:', response.status, response.statusText);
+              // }
+
+              log.debug('是否过审:', !response.data.tips);
+              if (response.data?.detections.length > 0) {
+                session.send('图片违规');
+                if (!mask && outMeth !== '详细信息') return; // 阻止图片输出
+              }
+            }
 
             image = Buffer.from(response.data.images[0], 'base64');
             if (outMeth === '仅图片') return h.img(image, 'image/png');

@@ -1,5 +1,5 @@
 import { Schema, Logger } from 'koishi';
-import { samplerL, schedulerL, ad_modelL, wd_modelL } from './list';
+import { samplerL, schedulerL, ad_modelL, wd_modelL, labelL, mask_typeL } from './list';
 
 export const log = new Logger('sd-webui-api');
 
@@ -56,6 +56,20 @@ export interface Config {
     sd?: number;  // 绘画收费
     wd?: number;  // 反推收费
   }; // 启用经济系统
+  censor: {
+    enable?: boolean;
+    endpoint?: string;
+    labels?: string[];
+    mask?: {
+      enable?: boolean;
+      type?: string;
+      color?: number[];
+      maskShape?: string;
+      maskScale?: number;
+      blurStrength?: number;
+      transitionSpeed?: number;
+    }
+  };
   closingMode: {
     enable?: boolean;
     tips?: string;
@@ -125,7 +139,7 @@ export const Config: Schema<Config> = Schema.intersect([
         Schema.union([
           Schema.object({
             enable: Schema.const(true).required(),
-            indicators: Schema.array(Schema.union(['sensitive', 'questionable', 'explicit'])).default(['sensitive', 'questionable', 'explicit']).description('选择评估指标').role('checkbox'),
+            indicators: Schema.array(Schema.union(['sensitive', 'questionable', 'explicit'])).role('select').default(['sensitive', 'questionable', 'explicit']).description('选择评估指标'),
             score: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.8).description('判定敏感图阈值')
           }),
           Schema.object({}),
@@ -134,17 +148,9 @@ export const Config: Schema<Config> = Schema.intersect([
     }).collapse(),
   }).description('图生词设置'),
   Schema.object({
-    outputMethod: Schema.union([
-      '仅图片',
-      '关键信息',
-      '详细信息'
-    ]).default('仅图片').description('输出方式，"详细信息"反推审核将失效'),
+    outputMethod: Schema.union(['仅图片', '关键信息', '详细信息']).default('仅图片').description('输出方式，"详细信息"反推审核将失效'),
     maxPrompt: Schema.number().min(0).max(200).step(1).role('slider').default(0).description('最大提示词数限制，设置为0关闭'),
-    excessHandle: Schema.union([
-      '仅提示',
-      '从前删除',
-      '从后删除'
-    ]).default('从后删除').description('提示词超限处理'),
+    excessHandle: Schema.union(['仅提示', '从前删除', '从后删除']).default('从后删除').description('提示词超限处理'),
     setConfig: Schema.boolean().default(false).description('是否启用指令修改SD全局设置'),
   }).description('其他设置'),
   Schema.object({
@@ -172,6 +178,48 @@ export const Config: Schema<Config> = Schema.intersect([
           wd: Schema.number().min(0).max(200).step(1).role('slider').default(10).description('反推启用经济，设置为0关闭'),
         }),
         Schema.object({})
+      ]),
+    ]),
+    censor: Schema.intersect([
+      Schema.object({
+        enable: Schema.boolean().default(false).description('是否对接外部审核系统'),
+      }),
+      Schema.union([
+        Schema.object({
+          enable: Schema.const(true).required(),
+          endpoint: Schema.string().default('http://127.0.0.1:5000').description('审核系统地址'),
+          labels: Schema.array(Schema.union(labelL)).role('select').default(['FEMALE_BREAST_EXPOSED', 'ANUS_EXPOSED', 'FEMALE_GENITALIA_EXPOSED', 'MALE_GENITALIA_EXPOSED']).description('选择审核内容'),
+          mask: Schema.intersect([
+            Schema.object({
+              enable: Schema.boolean().default(false).description('是否启用遮罩处理'),
+            }),
+            Schema.union([
+              Schema.intersect([
+                Schema.object({
+                  enable: Schema.const(true).required(),
+                  type: Schema.union(mask_typeL).default('gaussian_blur').description('遮罩类型'),
+                  maskShape: Schema.union(['rectangle', 'circle']).default('circle').description('遮罩形状'),
+                  maskScale: Schema.number().min(0).max(2).step(0.01).role('slider').default(1.3).description('遮罩放大尺寸'),
+                  blurStrength: Schema.number().min(0).max(100).step(1).role('slider').default(40).description('模糊强度'),
+                  transitionSpeed: Schema.number().min(0).max(2).step(0.01).role('slider').default(1.2).description('边缘过渡快慢'),
+                }),
+                Schema.union([
+                  Schema.object({
+                    type: Schema.const('color_block').required(),
+                    color: Schema.tuple([Number, Number, Number]).default([0, 0, 0]).description('遮罩颜色(B, G, R)'),
+                  }),
+                  Schema.object({
+                    type: Schema.const('full_color_block').required(),
+                    color: Schema.tuple([Number, Number, Number]).default([0, 0, 0]).description('遮罩颜色(B, G, R)'),
+                  }),
+                  Schema.object({}),
+                ]),
+              ]),
+              Schema.object({}),
+            ]),
+          ]),
+        }),
+        Schema.object({}),
       ]),
     ]),
     closingMode: Schema.intersect([

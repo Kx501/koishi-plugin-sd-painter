@@ -1,3 +1,9 @@
+export const enum Intents {
+
+
+}
+
+
 export const samplerL = [
     'DPM++ 2M',
     'DPM++ SDE',
@@ -57,4 +63,33 @@ export const wd_modelL = [
     'wd14-vit',
     'wd14-vit-v2',
     'wd14-vit-v2-git',
+]
+
+export const labelL = [
+    'FEMALE_GENITALIA_COVERED',
+    'FACE_FEMALE',
+    'BUTTOCKS_EXPOSED',
+    'FEMALE_BREAST_EXPOSED',
+    'FEMALE_GENITALIA_EXPOSED',
+    'MALE_BREAST_EXPOSED',
+    'ANUS_EXPOSED',
+    'FEET_EXPOSED',
+    'BELLY_COVERED',
+    'FEET_COVERED',
+    'ARMPITS_COVERED',
+    'ARMPITS_EXPOSED',
+    'FACE_MALE',
+    'BELLY_EXPOSED',
+    'MALE_GENITALIA_EXPOSED',
+    'ANUS_COVERED',
+    'FEMALE_BREAST_COVERED',
+    'BUTTOCKS_COVERED',
+]
+
+export const mask_typeL = [
+    'color_block',
+    'full_color_block',
+    'gaussian_blur',
+    'full_gaussian_blur',
+    'mosaic',
 ]
