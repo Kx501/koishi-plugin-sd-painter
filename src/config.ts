@@ -198,7 +198,7 @@ export const Config: Schema<Config> = Schema.intersect([
                 Schema.object({
                   enable: Schema.const(true).required(),
                   type: Schema.union(mask_typeL).default('gaussian_blur').description('遮罩类型'),
-                  maskShape: Schema.union(['rectangle', 'circle']).default('circle').description('遮罩形状'),
+                  maskShape: Schema.union(['rectangle', 'ellipse']).default('ellipse').description('遮罩形状'),
                   maskScale: Schema.number().min(0).max(2).step(0.01).role('slider').default(1.3).description('遮罩放大尺寸'),
                   blurStrength: Schema.number().min(0).max(100).step(1).role('slider').default(40).description('模糊强度'),
                   transitionSpeed: Schema.number().min(0).max(2).step(0.01).role('slider').default(1.2).description('边缘过渡快慢'),

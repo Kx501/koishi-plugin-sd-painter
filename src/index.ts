@@ -263,7 +263,7 @@ export function apply(ctx: Context, config: Config) {
               });
             }
             log.debug('绘画API响应状态:', response.statusText);
-            let image = response.data.images[0];
+            let imgBase = response.data.images[0];
             // log.debug(image); // 开发其他平台时做参考
 
             // 聊天记录
@@ -280,43 +280,41 @@ export function apply(ctx: Context, config: Config) {
               if (options?.negative !== '') msgCol.children.push(h('message', attrs, `负向提示词:\n${negativePrompt}`));
             } else if (outMeth === '详细信息') msgCol.children.push(h('message', attrs, JSON.stringify(payload, null, 4)));
 
+
             // 审核
             if (censor) {
               const payload3 = {
-                images: [
-                  image
-                ],
                 config: {
                   mask_type: maskType,
-                  color: color,
+                  ...(color !== undefined && { color: (color[0], color[1], color[2]) }),
                   mask_shape: maskShape,
                   mask_scale: maskScale,
                   blur_strength: blurStrength,
-                  transition_speed: transitionSpeed
-                }
+                  transition_speed: transitionSpeed,
+                  labels: labels,
+                },
+                images: imgBase,
               }
+
               session.send('进入审核阶段...');
-              let response = await ctx.http('POST', cEndpoint, {
+              const response = await ctx.http('POST', `${cEndpoint}/detect`, {
                 data: payload3,
               });
-              // if (response.status == 200) {
+              const boxes = response.data?.detections?.length;
 
-              // }
-              // else {
-              //   log.debug('Error:', response.status, response.statusText);
-              // }
-
-              log.debug('是否过审:', !response.data.tips);
-              if (response.data?.detections.length > 0) {
+              log.debug('是否过审:', !boxes);
+              if (boxes) {
                 session.send('图片违规');
                 if (!mask && outMeth !== '详细信息') return; // 阻止图片输出
+                imgBase = Buffer.from(response.data.images[0], 'base64');
               }
             }
 
-            image = Buffer.from(response.data.images[0], 'base64');
-            if (outMeth === '仅图片') return h.img(image, 'image/png');
+
+            // log.debug(response.data);
+            if (outMeth === '仅图片') return h.img(imgBase, 'image/png');
             else {
-              msgCol.children.push(h.img(image, 'image/png'));
+              msgCol.children.push(h.img(imgBase, 'image/png'));
               return msgCol;
             }
           } catch (error) {
