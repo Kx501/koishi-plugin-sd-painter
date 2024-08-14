@@ -40,7 +40,7 @@ export function apply(ctx: Context, config: Config) {
   const useTrans = config.useTranslation.enable;
   const monetary = config.monetary.enable;
   const { enable: censor, endpoint: cEndpoint, labels } = config.censor;
-  const { enable: mask, type: maskType, color, maskShape, maskScale, blurStrength, transitionSpeed } = config.censor.mask;
+  const { enable: mask, type: maskType, color, maskShape, maskScale, blurStrength, gradualRatio } = config.censor.mask;
 
   const header1 = {
     'accept': 'application/json',
@@ -290,7 +290,7 @@ export function apply(ctx: Context, config: Config) {
                   mask_shape: maskShape,
                   mask_scale: maskScale,
                   blur_strength: blurStrength,
-                  transition_speed: transitionSpeed,
+                  transition_speed: gradualRatio,
                   labels: labels,
                 },
                 images: imgBase,
