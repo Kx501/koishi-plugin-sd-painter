@@ -201,7 +201,7 @@ export const Config: Schema<Config> = Schema.intersect([
                   maskShape: Schema.union(['rectangle', 'ellipse']).default('ellipse').description('遮罩形状'),
                   maskScale: Schema.number().min(0).max(2).step(0.01).role('slider').default(1.3).description('遮罩放大尺寸'),
                   blurStrength: Schema.number().min(0).max(100).step(1).role('slider').default(40).description('模糊强度'),
-                  gradualRatio: Schema.number().min(0).max(1).step(0.01).role('slider').default(1.2).description('从中心到开始渐变的距离'),
+                  gradualRatio: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.8).description('从中心到开始渐变的距离'),
                 }),
                 Schema.union([
                   Schema.object({
