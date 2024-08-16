@@ -16,6 +16,8 @@ export const usage = `
 * 功能 1：文/图生图
 * 功能 2：提示词反推
 * 功能 3：查询/切换模型
+* 功能 4：修改配置(未测试)
+* 功能 5：图片审核，见 [imgCensor](https://github.com/Kx501/koishi-plugin-imgcensor)
 
 ### 注意事项
 1. 子指令只能直接调用
@@ -284,16 +286,16 @@ export function apply(ctx: Context, config: Config) {
             // 审核
             if (censor) {
               const payload3 = {
+                image: imgBase,
                 config: {
                   mask_type: maskType,
                   ...(color !== undefined && { color: (color[0], color[1], color[2]) }),
-                  mask_shape: maskShape,
-                  mask_scale: maskScale,
-                  blur_strength: blurStrength,
-                  transition_speed: gradualRatio,
+                  ...(maskShape !== undefined && { mask_shape: maskShape }),
+                  ...(maskScale !== undefined && { mask_scale: maskScale }),
+                  ...(blurStrength !== undefined && { blur_strength: blurStrength }),
+                  ...(gradualRatio !== undefined && { gradual_ratio: gradualRatio }),
                   labels: labels,
                 },
-                images: imgBase,
               }
 
               session.send('进入审核阶段...');
@@ -304,8 +306,10 @@ export function apply(ctx: Context, config: Config) {
 
               log.debug('是否过审:', !boxes);
               if (boxes) {
-                session.send('图片违规');
-                if (!mask && outMeth !== '详细信息') return; // 阻止图片输出
+                if (!mask && outMeth !== '详细信息') {
+                  session.send('图片违规');
+                  return; // 阻止图片输出
+                }
                 imgBase = Buffer.from(response.data.images[0], 'base64');
               }
             }
@@ -320,6 +324,7 @@ export function apply(ctx: Context, config: Config) {
           } catch (error) {
             log.error('生成图片出错:', error);
             if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
+            if (error?.response.data?.detail) return `请求出错: ${error.response.data.detail}`;
             return `生成图片出错: ${error.message}`.replace(/https?:\/\/[^/]+/g, (url) => {
               return url.replace(/\/\/[^/]+/, '//***');
             });

@@ -64,9 +64,9 @@ export interface Config {
       enable?: boolean;
       type?: string;
       color?: number[];
+      blurStrength?: number;
       maskShape?: string;
       maskScale?: number;
-      blurStrength?: number;
       gradualRatio?: number;
     }
   };
@@ -197,20 +197,36 @@ export const Config: Schema<Config> = Schema.intersect([
               Schema.intersect([
                 Schema.object({
                   enable: Schema.const(true).required(),
-                  type: Schema.union(mask_typeL).default('gaussian_blur').description('遮罩类型'),
-                  maskShape: Schema.union(['rectangle', 'ellipse']).default('ellipse').description('遮罩形状'),
-                  maskScale: Schema.number().min(0).max(2).step(0.01).role('slider').default(1.3).description('遮罩放大尺寸'),
-                  blurStrength: Schema.number().min(0).max(100).step(1).role('slider').default(40).description('模糊强度'),
-                  gradualRatio: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.8).description('从中心到开始渐变的距离'),
+                  type: Schema.union(mask_typeL).default('None').description('遮罩类型'),
                 }),
                 Schema.union([
                   Schema.object({
                     type: Schema.const('color_block').required(),
                     color: Schema.tuple([Number, Number, Number]).default([0, 0, 0]).description('遮罩颜色(B, G, R)'),
+                    gradualRatio: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.2).description('边缘羽化距离'),
+                    maskShape: Schema.union(['rectangle', 'ellipse']).default('ellipse').description('遮罩形状'),
+                    maskScale: Schema.number().min(0).max(3).step(0.01).role('slider').default(1.3).description('遮罩放大尺寸'),
                   }),
                   Schema.object({
                     type: Schema.const('full_color_block').required(),
                     color: Schema.tuple([Number, Number, Number]).default([0, 0, 0]).description('遮罩颜色(B, G, R)'),
+                  }),
+                  Schema.object({
+                    type: Schema.const('gaussian_blur').required(),
+                    blurStrength: Schema.number().min(0).max(10).step(1).role('slider').default(4).description('模糊强度'),
+                    gradualRatio: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.2).description('边缘羽化距离'),
+                    maskShape: Schema.union(['rectangle', 'ellipse']).default('ellipse').description('遮罩形状'),
+                    maskScale: Schema.number().min(0).max(3).step(0.01).role('slider').default(1.4).description('遮罩放大尺寸'),
+                  }),
+                  Schema.object({
+                    type: Schema.const('full_gaussian_blur').required(),
+                    blurStrength: Schema.number().min(0).max(10).step(1).role('slider').default(7).description('模糊强度'),
+                  }),
+                  Schema.object({
+                    type: Schema.const('mosaic').required(),
+                    blurStrength: Schema.number().min(0).max(10).step(1).role('slider').default(4).description('模糊强度'),
+                    maskShape: Schema.union(['rectangle', 'ellipse']).default('ellipse').description('遮罩形状'),
+                    maskScale: Schema.number().min(0).max(3).step(0.01).role('slider').default(1.3).description('遮罩放大尺寸'),
                   }),
                   Schema.object({}),
                 ]),

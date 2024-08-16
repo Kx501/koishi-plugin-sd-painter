@@ -87,6 +87,7 @@ export const labelL = [
 ]
 
 export const mask_typeL = [
+    'None',
     'color_block',
     'full_color_block',
     'gaussian_blur',
