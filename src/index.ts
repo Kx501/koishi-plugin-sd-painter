@@ -324,9 +324,21 @@ export function apply(ctx: Context, config: Config) {
           } catch (error) {
             log.error('生成图片出错:', error);
             if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
-            if (error?.response.data?.detail) return `请求出错: ${error.response.data.detail}`;
-            return `生成图片出错: ${error.message}`.replace(/https?:\/\/[^/]+/g, (url) => {
-              return url.replace(/\/\/[^/]+/, '//***');
+            if (error?.response?.data?.detail) return `请求出错: ${error.response.data.detail}`;
+            return `生成图片出错: ${error.message}`.replace(/(https?:\/\/)?([0-9.]+|[^/:]+):(\d+)/g, (_, protocol, host, port) => {
+              let maskedHost: string;
+              if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+                // 处理IP
+                const ipParts = host.split('.');
+                maskedHost = [ipParts[0], '***', '***', ipParts[3]].join('.');
+              } else {
+                // 处理域名
+                const domainParts = host.split('.');
+                maskedHost = ['***', domainParts[domainParts.length - 1]].join('.');
+              }
+              // 处理端口
+              const maskedPort = port.slice(0, -3) + '***';
+              return `${protocol ? protocol : ''}://${maskedHost}:${maskedPort}`;
             });
           }
         }
