@@ -42,7 +42,7 @@ export function apply(ctx: Context, config: Config) {
   const useTrans = config.useTranslation.enable;
   const monetary = config.monetary.enable;
   const { enable: censor, endpoint: cEndpoint, labels } = config.censor;
-  const { enable: mask, type: maskType, color, maskShape, maskScale, blurStrength, gradualRatio } = config.censor.mask;
+  const { enable: mask, type: maskType, color, maskShape, maskScale, blurStrength, gradualRatio } = config.censor?.mask ?? {};
 
   const header1 = {
     'accept': 'application/json',
