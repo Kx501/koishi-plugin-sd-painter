@@ -80,7 +80,7 @@ export function apply(ctx: Context, config: Config) {
     .option('server', '-x <number> 指定服务器编号')
     .option('noPositiveTags', '-P 禁用默认正向提示词')
     .option('noNegativeTags', '-N 禁用默认负向提示词')
-    .option('hiresFix', '-H 禁用高分辨率修复')
+    .option('noHiresFix', '-H 禁用高分辨率修复')
     // .option('restoreFaces', '-R 禁用人脸修复')
     .option('noAdetailer', '-A 禁用Adetailer')
     .option('noTranslate', '-T 禁用翻译')
@@ -106,7 +106,9 @@ export function apply(ctx: Context, config: Config) {
 
 
         //// 读取配置 ////
-        const { save, imgSize, cfgScale, txt2imgSteps: t2iSteps, img2imgSteps: i2iSteps, maxSteps, prePrompt, preNegPrompt, hiresFix, restoreFaces: resFaces } = config.IMG;
+        const { save, imgSize, cfgScale, txt2imgSteps: t2iSteps, img2imgSteps: i2iSteps, maxSteps, prePrompt, preNegPrompt, restoreFaces: resFaces } = config.IMG;
+        const { enable: enableHiresFix, hrUpscaler, denoisingStrength, hrSecondPassSteps: hrSteps, fixWay } = config.IMG?.hiresFix
+        const { type: hrFixType, hrScale, hrResizeX, hrResizeY } = fixWay ?? {}
         const adEnable = config.AD.ADetailer.enable;
 
         // 选择服务器
@@ -146,9 +148,10 @@ export function apply(ctx: Context, config: Config) {
         const schName = options?.scheduler || scheduler;
         const noPosTags = options?.noPositiveTags;
         const noNegTags = options?.noNegativeTags;
-        const Trans = options?.noTranslate || useTrans;
+        const Trans = useTrans && !options?.noTranslate;
         const modelName = options?.model;
         const vaeName = options?.vae;
+        const hiresFix = !options?.img2img && !options.noHiresFix && enableHiresFix;
 
         // 翻译
         let tmpPrompt = _;
@@ -227,14 +230,20 @@ export function apply(ctx: Context, config: Config) {
           ...((prompt !== '' || negativePrompt !== '') && { cfg_scale: cfg }),
           width: size[0],
           height: size[1],
-          ...(resFaces && { restore_faces: true }),
-          save_images: save,
           ...((modelName || vaeName) && {
             override_settings: {
               ...(modelName && { sd_model_checkpoint: modelName }),
               ...(vaeName && { sd_vae: vaeName }),
             }
           }),
+          ...(hiresFix && {
+            enable_hr: true,
+            hr_upscaler: hrUpscaler,
+            ...(hrFixType === '比例放大' ? { hr_scale: hrScale } : { hr_resize_x: hrResizeX, hr_resize_y: hrResizeY }),
+            denoising_strength: denoisingStrength,
+            hr_second_pass_steps: hrSteps
+          }),
+          save_images: save,
           ...(initImages && { init_images: [initImages] })
         }
 

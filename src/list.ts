@@ -30,6 +30,12 @@ export const schedulerL = [
 ]
 
 export const hr_modelL = [
+    'Latent',
+    'Latent (antialiased)',
+    'Latent (bicubic)',
+    'Latent (bicubic antialiased)',
+    'Latent (nearest)',
+    'Latent (nearest-exact)',
     'Lanczos',
     'Nearest',
     '4x-AnimeSharp',
@@ -47,26 +53,16 @@ export const hr_modelL = [
 ]
 
 export const ad_modelL = [
-    'Latent',
-    'Latent (antialiased)',
-    'Latent (bicubic)',
-    'Latent (bicubic antialiased)',
-    'Latent (nearest)',
-    'Latent (nearest-exact)',
-    'Lanczos',
-    'Nearest',
-    '4x-AnimeSharp',
-    'BSRGAN',
-    'DAT x2',
-    'DAT x3',
-    'DAT x4',
-    'ESRGAN 4x',
-    'LDSR',
-    'R-ESRGAN 4x+',
-    'R-ESRGAN 4x+ Anime6B',
-    'SCuNET',
-    'SCuNET PSNR',
-    'SwinIR 4x'
+    'face_yolov8n.pt',
+    'face_yolov8s.pt',
+    'hand_yolov8n.pt',
+    'person_yolov8nseg.pt',
+    'person_yolov8s-seg.pt',
+    'yolov8x-worldv2.pt',
+    'mediapipe_face_full',
+    'mediapipe_face_short',
+    'mediapipe_face_mesh',
+    'mediapipe face mesh eyes only'
 ]
 
 export const wd_modelL = [

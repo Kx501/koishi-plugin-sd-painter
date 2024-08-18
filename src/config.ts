@@ -27,7 +27,7 @@ export interface Config {
       denoisingStrength?: number; // 修复强度
       hrSecondPassSteps?: number; // 修复步数
       fixWay?: {
-        type: string; // 缩放方式
+        type?: string; // 缩放方式
         hrScale?: number; // 缩放比例,
         hrResizeX?: number; // 缩放宽度
         hrResizeY?: number; // 缩放高度
@@ -119,11 +119,11 @@ export const Config: Schema<Config> = Schema.intersect([
           Schema.object({
             enable: Schema.const(true).required(),
             hrUpscaler: Schema.union(hr_modelL).default('Latent').description('修复算法'),
-            denoisingStrength: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.75).description('修复强度'),
-            hrSecondPassSteps: Schema.number().min(1).max(150).step(1).role('slider').default(20).description('修复步数'),
+            denoisingStrength: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.7).description(''),
+            hrSecondPassSteps: Schema.number().min(0).max(150).step(1).role('slider').default(0).description(''),
             fixWay: Schema.intersect([
               Schema.object({
-                type: Schema.union(['比例放大', '重设尺寸']).default('比例放大').description('修复方式'),
+                type: Schema.union(['比例放大', '重设尺寸']).description('修复方式'),
               }),
               Schema.union([
                 Schema.object({
@@ -132,8 +132,8 @@ export const Config: Schema<Config> = Schema.intersect([
                 }),
                 Schema.object({
                   type: Schema.const('重设尺寸').required(),
-                  hrResizeX: Schema.number().min(0).max(2048).step(16).role('slider').default(1024).description('缩放宽度'),
-                  hrResizeY: Schema.number().min(0).max(2048).step(16).role('slider').default(1024).description('缩放高度'),
+                  hrResizeX: Schema.number().min(0).max(2048).step(16).role('slider').default(0).description('缩放宽度'),
+                  hrResizeY: Schema.number().min(0).max(2048).step(16).role('slider').default(0).description('缩放高度'),
                 }),
                 Schema.object({}),
               ]),
