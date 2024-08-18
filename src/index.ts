@@ -265,7 +265,7 @@ export function apply(ctx: Context, config: Config) {
               });
             }
             log.debug('绘画API响应状态:', response.statusText);
-            let imgBase = response.data.images[0];
+            let imgBase: string = response.data.images[0];
             // log.debug(image); // 开发其他平台时做参考
 
             // 聊天记录
@@ -275,21 +275,15 @@ export function apply(ctx: Context, config: Config) {
             };
             const msgCol = h('figure');
 
-            if (outMeth === '关键信息') {
-              msgCol.children.push(h('message', attrs, `使用 ${servers.indexOf(endpoint)}号 服务器`));
-              msgCol.children.push(h('message', attrs, `步数:${steps}\n尺寸:${size}\n服从度:${cfg}\n采样器:${smpName}\n调度器:${schName}`));
-              if (_ !== '') msgCol.children.push(h('message', attrs, `正向提示词:\n${prompt}`));
-              if (options?.negative !== '') msgCol.children.push(h('message', attrs, `负向提示词:\n${negativePrompt}`));
-            } else if (outMeth === '详细信息') msgCol.children.push(h('message', attrs, JSON.stringify(payload, null, 4)));
-
-
             // 审核
+            let response2: HTTP.Response<any>
+            let imgBuffer: Buffer
             if (censor) {
               const payload3 = {
                 image: imgBase,
                 config: {
                   mask_type: maskType,
-                  ...(color !== undefined && { color: (color[0], color[1], color[2]) }),
+                  ...(color !== undefined && { color: color }),
                   ...(maskShape !== undefined && { mask_shape: maskShape }),
                   ...(maskScale !== undefined && { mask_scale: maskScale }),
                   ...(blurStrength !== undefined && { blur_strength: blurStrength }),
@@ -299,10 +293,11 @@ export function apply(ctx: Context, config: Config) {
               }
 
               session.send('进入审核阶段...');
-              const response = await ctx.http('POST', `${cEndpoint}/detect`, {
+              response2 = await ctx.http('POST', `${cEndpoint}/detect`, {
                 data: payload3,
+                headers: header1,
               });
-              const boxes = response.data?.detections?.length;
+              const boxes = response2.data?.detections?.length;
 
               log.debug('是否过审:', !boxes);
               if (boxes) {
@@ -310,21 +305,33 @@ export function apply(ctx: Context, config: Config) {
                   session.send('图片违规');
                   return; // 阻止图片输出
                 }
-                imgBase = Buffer.from(response.data.images[0], 'base64');
-              }
+                imgBuffer = Buffer.from(response2.data.image[0], 'base64');
+              } else imgBuffer = Buffer.from(imgBase, 'base64');
+            } else imgBuffer = Buffer.from(imgBase, 'base64');
+
+
+            if (outMeth === '关键信息') {
+              msgCol.children.push(h('message', attrs, `使用 ${servers.indexOf(endpoint)}号 服务器`));
+              msgCol.children.push(h('message', attrs, `步数:${steps}\n尺寸:${size[0]}×${size[1]}\n服从度:${cfg}\n采样器:${smpName}\n调度器:${schName}`));
+              if (_ !== '') msgCol.children.push(h('message', attrs, `正向提示词:\n${prompt}`));
+              if (options?.negative !== '') msgCol.children.push(h('message', attrs, `负向提示词:\n${negativePrompt}`));
             }
 
-
             // log.debug(response.data);
-            if (outMeth === '仅图片') return h.img(imgBase, 'image/png');
+            if (outMeth === '仅图片') return h.img(imgBuffer, 'image/png');
             else {
-              msgCol.children.push(h.img(imgBase, 'image/png'));
+              msgCol.children.push(h.img(imgBuffer, 'image/png'));
+              if (outMeth === '详细信息') {
+                msgCol.children.push(h('message', attrs, JSON.stringify(response.data.parameters, null, 4)))
+                msgCol.children.push(h('message', attrs, JSON.stringify(response2.data.detections, null, 4)));
+              };
               return msgCol;
             }
           } catch (error) {
             log.error('生成图片出错:', error);
             if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
             if (error?.response?.data?.detail) return `请求出错: ${error.response.data.detail}`;
+            if (outMeth === '详细信息') return error;
             return `生成图片出错: ${error.message}`.replace(/(https?:\/\/)?([0-9.]+|[^/:]+):(\d+)/g, (_, protocol, host, port) => {
               let maskedHost: string;
               if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {

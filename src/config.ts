@@ -134,7 +134,7 @@ export const Config: Schema<Config> = Schema.intersect([
       threshold: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.3).description('输出提示词的置信度'),
       imgCensor: Schema.intersect([
         Schema.object({
-          enable: Schema.boolean().default(false).description('是否用于审核图片').experimental().disabled(),
+          enable: Schema.boolean().default(false).description('是否用于审核图片').deprecated().disabled(),
         }),
         Schema.union([
           Schema.object({
@@ -148,7 +148,7 @@ export const Config: Schema<Config> = Schema.intersect([
     }).collapse(),
   }).description('图生词设置'),
   Schema.object({
-    outputMethod: Schema.union(['仅图片', '关键信息', '详细信息']).default('仅图片').description('输出方式，"详细信息"反推审核将失效'),
+    outputMethod: Schema.union(['仅图片', '关键信息', '详细信息']).default('仅图片').description('输出方式，"详细信息"仅用于调试，且*审核将失效*'),
     maxPrompt: Schema.number().min(0).max(200).step(1).role('slider').default(0).description('最大提示词数限制，设置为0关闭'),
     excessHandle: Schema.union(['仅提示', '从前删除', '从后删除']).default('从后删除').description('提示词超限处理'),
     setConfig: Schema.boolean().default(false).description('是否启用指令修改SD全局设置'),
