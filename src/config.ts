@@ -24,8 +24,8 @@ export interface Config {
     hiresFix: {
       enable?: boolean; // 高分辨率修复
       hrUpscaler?: string; // 修复算法
-      denoisingStrength?: number; // 修复强度
       hrSecondPassSteps?: number; // 修复步数
+      denoisingStrength?: number; // 修复强度
       fixWay?: {
         type?: string; // 缩放方式
         hrScale?: number; // 缩放比例,
@@ -119,8 +119,8 @@ export const Config: Schema<Config> = Schema.intersect([
           Schema.object({
             enable: Schema.const(true).required(),
             hrUpscaler: Schema.union(hr_modelL).default('Latent').description('修复算法'),
-            denoisingStrength: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.7).description(''),
-            hrSecondPassSteps: Schema.number().min(0).max(150).step(1).role('slider').default(0).description(''),
+            hrSecondPassSteps: Schema.number().min(0).max(150).step(1).role('slider').default(0).description('步数'),
+            denoisingStrength: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.7).description('降噪强度'),
             fixWay: Schema.intersect([
               Schema.object({
                 type: Schema.union(['比例放大', '重设尺寸']).description('修复方式'),

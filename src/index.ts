@@ -75,8 +75,12 @@ export function apply(ctx: Context, config: Config) {
     .option('cfgScale', '-c <float> 提示词服从度')
     .option('size', '-z <宽x高> 图像尺寸')
     .option('seed', '-e <number> 随机种子')
-    .option('sampler', '-p <name> 采样器')
-    .option('scheduler', '-r <name> 调度器')
+    .option('sampler', '-l <name> 采样器')
+    .option('scheduler', '-d <name> 调度器')
+    .option('fixAlgorithm', '-f <name> 高分辨率修复算法')
+    .option('secondPassSteps', '-b <number> 修复步数')
+    .option('denoisingStrength', '-o <float> 修复降噪强度')
+    .option('hrScale', '-r <float> 修复比例')
     .option('server', '-x <number> 指定服务器编号')
     .option('noPositiveTags', '-P 禁用默认正向提示词')
     .option('noNegativeTags', '-N 禁用默认负向提示词')
@@ -107,8 +111,8 @@ export function apply(ctx: Context, config: Config) {
 
         //// 读取配置 ////
         const { save, imgSize, cfgScale, txt2imgSteps: t2iSteps, img2imgSteps: i2iSteps, maxSteps, prePrompt, preNegPrompt, restoreFaces: resFaces } = config.IMG;
-        const { enable: enableHiresFix, hrUpscaler, denoisingStrength, hrSecondPassSteps: hrSteps, fixWay } = config.IMG?.hiresFix
-        const { type: hrFixType, hrScale, hrResizeX, hrResizeY } = fixWay ?? {}
+        const { enable: enableHiresFix, hrUpscaler, hrSecondPassSteps: hrSteps, denoisingStrength, fixWay } = config.IMG?.hiresFix
+        const { type: hiresFixType, hrScale, hrResizeX, hrResizeY } = fixWay ?? {}
         const adEnable = config.AD.ADetailer.enable;
 
         // 选择服务器
@@ -152,6 +156,11 @@ export function apply(ctx: Context, config: Config) {
         const modelName = options?.model;
         const vaeName = options?.vae;
         const hiresFix = !options?.img2img && !options.noHiresFix && enableHiresFix;
+        const hiresAlgorithm = options?.fixAlgorithm || hrUpscaler;
+        const hrFixType = options?.hrScale ? '比例放大' : hiresFixType;
+        const hiresSteps = options?.secondPassSteps || hrSteps;
+        const hiresDenoising = options?.denoisingStrength || denoisingStrength;
+        const hiresScale = options?.hrScale || hrScale;
 
         // 翻译
         let tmpPrompt = _;
@@ -238,10 +247,10 @@ export function apply(ctx: Context, config: Config) {
           }),
           ...(hiresFix && {
             enable_hr: true,
-            hr_upscaler: hrUpscaler,
-            ...(hrFixType === '比例放大' ? { hr_scale: hrScale } : { hr_resize_x: hrResizeX, hr_resize_y: hrResizeY }),
-            denoising_strength: denoisingStrength,
-            hr_second_pass_steps: hrSteps
+            hr_upscaler: hiresAlgorithm,
+            ...(hrFixType === '比例放大' ? { hr_scale: hiresScale } : { hr_resize_x: hrResizeX, hr_resize_y: hrResizeY }),
+            denoising_strength: hiresDenoising,
+            hr_second_pass_steps: hiresSteps
           }),
           save_images: save,
           ...(initImages && { init_images: [initImages] })
@@ -317,6 +326,7 @@ export function apply(ctx: Context, config: Config) {
 
               session.send('进入审核阶段...');
               response2 = await ctx.http('POST', `${cEndpoint}/detect`, {
+                timeout: timeOut,
                 data: payload3,
                 headers: header1,
               });
@@ -393,7 +403,7 @@ export function apply(ctx: Context, config: Config) {
   // 注册 Endpoint Interrogate 指令
   ctx.command('sd').subcommand('sdtag [imgURL]', '图片生成提示词')
     .option('model', '-m <model_name> 使用的模型')
-    .option('threshold', '-t <number> 提示词输出置信度')
+    .option('threshold', '-t <float> 提示词输出置信度')
     .option('server', '-x <number> 指定服务器编号')
     .action(async ({ options, session }, _) => {
       if (!maxTasks || taskNum < maxTasks) {
@@ -517,6 +527,7 @@ export function apply(ctx: Context, config: Config) {
 
         // Interruptapi
         const response = await ctx.http('post', `${endpoint}/sdapi/v1/interrupt`, {
+          timeout: timeOut,
         });
 
         // log.debug('API响应结果:', response);
