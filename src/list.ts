@@ -1,9 +1,3 @@
-export const enum Intents {
-
-
-}
-
-
 export const samplerL = [
     'DPM++ 2M',
     'DPM++ SDE',
@@ -24,7 +18,7 @@ export const samplerL = [
     'PLMS',
     'UniPC',
     'LCM'
-];
+]
 
 export const schedulerL = [
     'Automatic',
@@ -33,19 +27,46 @@ export const schedulerL = [
     'Exponential',
     'Polyexponential',
     'SGM Uniform'
-];
+]
+
+export const hr_modelL = [
+    'Lanczos',
+    'Nearest',
+    '4x-AnimeSharp',
+    'BSRGAN',
+    'DAT x2',
+    'DAT x3',
+    'DAT x4',
+    'ESRGAN 4X',
+    'LDSR',
+    'R-ESRGAN 4x+',
+    'R-ESRGAN 4x+ Anime6B',
+    'SCuNET',
+    'SCuNET PSNR',
+    'SwinlR 4x'
+]
 
 export const ad_modelL = [
-    'face_yolov8n.pt',
-    'face_yolov8s.pt',
-    'hand_yolov8n.pt',
-    'person_yolov8nseg.pt',
-    'person_yolov8s-seg.pt',
-    'yolov8x-worldv2.pt',
-    'mediapipe_face_full',
-    'mediapipe_face_short',
-    'mediapipe_face_mesh',
-    'mediapipe face mesh eyes only',
+    'Latent',
+    'Latent (antialiased)',
+    'Latent (bicubic)',
+    'Latent (bicubic antialiased)',
+    'Latent (nearest)',
+    'Latent (nearest-exact)',
+    'Lanczos',
+    'Nearest',
+    '4x-AnimeSharp',
+    'BSRGAN',
+    'DAT x2',
+    'DAT x3',
+    'DAT x4',
+    'ESRGAN 4x',
+    'LDSR',
+    'R-ESRGAN 4x+',
+    'R-ESRGAN 4x+ Anime6B',
+    'SCuNET',
+    'SCuNET PSNR',
+    'SwinIR 4x'
 ]
 
 export const wd_modelL = [
@@ -62,7 +83,7 @@ export const wd_modelL = [
     'wd14-swinv2-v2-git',
     'wd14-vit',
     'wd14-vit-v2',
-    'wd14-vit-v2-git',
+    'wd14-vit-v2-git'
 ]
 
 export const labelL = [
@@ -83,7 +104,7 @@ export const labelL = [
     'MALE_GENITALIA_EXPOSED',
     'ANUS_COVERED',
     'FEMALE_BREAST_COVERED',
-    'BUTTOCKS_COVERED',
+    'BUTTOCKS_COVERED'
 ]
 
 export const mask_typeL = [
@@ -92,5 +113,5 @@ export const mask_typeL = [
     'full_color_block',
     'gaussian_blur',
     'full_gaussian_blur',
-    'mosaic',
+    'mosaic'
 ]

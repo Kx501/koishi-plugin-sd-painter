@@ -1,5 +1,5 @@
 import { Schema, Logger } from 'koishi';
-import { samplerL, schedulerL, ad_modelL, wd_modelL, labelL, mask_typeL } from './list';
+import { samplerL, schedulerL, hr_modelL, ad_modelL, wd_modelL, labelL, mask_typeL } from './list';
 
 export const log = new Logger('sd-webui-api');
 
@@ -12,6 +12,7 @@ export interface Config {
     scheduler: string; // 调度器选项
     imgSize: number[]; // 图片尺寸
     cfgScale: number; // CFG Scale
+    // img2img: boolean; // 图生图重绘幅度
     txt2imgSteps: number; // 文生图步骤数
     img2imgSteps: number; // 图生图步骤数
     maxSteps: number; // 最大步骤数（指令允许的最大）
@@ -19,12 +20,23 @@ export interface Config {
     negativePrompt: string; // 负向提示词
     prePrompt: boolean; // 正向提示词是否前置
     preNegPrompt: boolean; // 负向提示词是否前置
-    restoreFaces: boolean; // 是否使用人脸修复
-    hiresFix: boolean; // 是否使用高分辨率修复
+    restoreFaces: boolean; // 人脸修复
+    hiresFix: {
+      enable?: boolean; // 高分辨率修复
+      hrUpscaler?: string; // 修复算法
+      denoisingStrength?: number; // 修复强度
+      hrSecondPassSteps?: number; // 修复步数
+      fixWay?: {
+        type: string; // 缩放方式
+        hrScale?: number; // 缩放比例,
+        hrResizeX?: number; // 缩放宽度
+        hrResizeY?: number; // 缩放高度
+      };
+    }
   };
   AD: {
     ADetailer: {
-      enable?: boolean; // 默认开启
+      enable?: boolean; // AD修复
       models?: {
         name: string;  // 模型选项
         prompt: string; // 正向提示词
@@ -52,10 +64,10 @@ export interface Config {
   };
   maxTasks: number; // 最大任务数
   monetary: {
-    enable?: boolean;
+    enable?: boolean; // 启用经济系统
     sd?: number;  // 绘画收费
     wd?: number;  // 反推收费
-  }; // 启用经济系统
+  };
   censor: {
     enable?: boolean;
     endpoint?: string;
@@ -99,7 +111,37 @@ export const Config: Schema<Config> = Schema.intersect([
       prePrompt: Schema.boolean().default(true).description('默认正向提示词是否放在最前面'),
       preNegPrompt: Schema.boolean().default(true).description('默认负向提示词是否放在最前面'),
       restoreFaces: Schema.boolean().default(false).description('是否启用人脸修复').disabled(),
-      hiresFix: Schema.boolean().default(false).description('是否启用高分辨率修复').disabled(),
+      hiresFix: Schema.intersect([
+        Schema.object({
+          enable: Schema.boolean().default(false).description('高分辨率修复'),
+        }),
+        Schema.union([
+          Schema.object({
+            enable: Schema.const(true).required(),
+            hrUpscaler: Schema.union(hr_modelL).default('Latent').description('修复算法'),
+            denoisingStrength: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.75).description('修复强度'),
+            hrSecondPassSteps: Schema.number().min(1).max(150).step(1).role('slider').default(20).description('修复步数'),
+            fixWay: Schema.intersect([
+              Schema.object({
+                type: Schema.union(['比例放大', '重设尺寸']).default('比例放大').description('修复方式'),
+              }),
+              Schema.union([
+                Schema.object({
+                  type: Schema.const('比例放大').required(),
+                  hrScale: Schema.number().min(1).max(4).step(0.01).role('slider').default(2).description('缩放比例'),
+                }),
+                Schema.object({
+                  type: Schema.const('重设尺寸').required(),
+                  hrResizeX: Schema.number().min(0).max(2048).step(16).role('slider').default(1024).description('缩放宽度'),
+                  hrResizeY: Schema.number().min(0).max(2048).step(16).role('slider').default(1024).description('缩放高度'),
+                }),
+                Schema.object({}),
+              ]),
+            ]),
+          }),
+          Schema.object({}),
+        ]),
+      ]),
     }).collapse(),
   }).description('绘画设置'),
   Schema.object({

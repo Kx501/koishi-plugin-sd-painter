@@ -17,12 +17,13 @@ export const usage = `
 * 功能 2：提示词反推
 * 功能 3：查询/切换模型
 * 功能 4：修改配置(未测试)
-* 功能 5：图片审核，见 [imgCensor](https://github.com/Kx501/koishi-plugin-imgcensor)
+* 功能 5：图片审核(测试版)，见 [imgCensor](https://github.com/Kx501/koishi-plugin-imgcensor)
 
 ### 注意事项
 1. 子指令只能直接调用
 2. 默认使用的是秋葉整合包
 3. 翻译服务默认百度翻译
+4. 默认指令较多，建议在指令管理中个性化配置
 `;
 
 // 插件主函数
@@ -64,6 +65,8 @@ export function apply(ctx: Context, config: Config) {
   }
 
 
+
+
   // 注册 text2img/img2img 指令
   ctx.command('sd [tags]', 'AI画图，若提示词有空格，首尾用引号括起来')
     .option('negative', '-n <tags> 负向提示词，若有空格，首尾用引号括起来')
@@ -77,7 +80,7 @@ export function apply(ctx: Context, config: Config) {
     .option('server', '-x <number> 指定服务器编号')
     .option('noPositiveTags', '-P 禁用默认正向提示词')
     .option('noNegativeTags', '-N 禁用默认负向提示词')
-    // .option('hiresFix', '-H 禁用高分辨率修复')
+    .option('hiresFix', '-H 禁用高分辨率修复')
     // .option('restoreFaces', '-R 禁用人脸修复')
     .option('noAdetailer', '-A 禁用Adetailer')
     .option('noTranslate', '-T 禁用翻译')
@@ -88,6 +91,8 @@ export function apply(ctx: Context, config: Config) {
         log.debug('调用绘图 API');
         log.debug('选择子选项:', options);
 
+
+        //// 经济系统 ////
         const sdMonetary = config.monetary.sd;
         let userAid: number;
         if (monetary && sdMonetary) {
@@ -99,7 +104,8 @@ export function apply(ctx: Context, config: Config) {
           }
         }
 
-        // 从config对象中读取配置
+
+        //// 读取配置 ////
         const { save, imgSize, cfgScale, txt2imgSteps: t2iSteps, img2imgSteps: i2iSteps, maxSteps, prePrompt, preNegPrompt, hiresFix, restoreFaces: resFaces } = config.IMG;
         const adEnable = config.AD.ADetailer.enable;
 
@@ -113,7 +119,9 @@ export function apply(ctx: Context, config: Config) {
             session.send('不存在该序列节点，自动选择0号节点')
           }
 
-        // 图生图
+
+        //// 参数处理 ////
+        // 检查图生图参数
         let initImages = options?.img2img;
         if (options.hasOwnProperty('img2img')) {
           log.debug('获取图片...');
@@ -171,7 +179,8 @@ export function apply(ctx: Context, config: Config) {
           }
         }
 
-        // 使用 ADetailer
+
+        //// 使用 ADetailer ////
         let payload2 = {};
 
         if (!options?.noAdetailer && adEnable) {
@@ -195,7 +204,9 @@ export function apply(ctx: Context, config: Config) {
             tmpList.push(tmpPayload);
           }));
 
-          // 构建请求体
+
+          //// 构建请求体 ////
+          // AD请求体
           payload2 = {
             alwayson_scripts: {
               ADetailer: {
@@ -205,7 +216,7 @@ export function apply(ctx: Context, config: Config) {
           }
         }
 
-        // 构建API请求体
+        // API请求体
         const payload1 = {
           ...(prompt !== '' && { prompt: tmpPrompt }),
           ...(negativePrompt !== '' && { negative_prompt: tmpNegPrompt }),
@@ -246,18 +257,19 @@ export function apply(ctx: Context, config: Config) {
           session.send(`在画了在画了，不过前面还有 ${taskNum} 个任务……`)
         }
 
+        //// 调用绘画API ////
         async function process() {
           try {
             let response: HTTP.Response<any>;
             if (initImages) {
-              // 调用 img2imgAPI
+              // img2imgAPI
               response = await ctx.http('post', `${endpoint}/sdapi/v1/img2img`, {
                 timeout: timeOut,
                 headers: header1,
                 data: payload
               });
             } else {
-              // 调用 txt2imgAPI
+              // txt2imgAPI
               response = await ctx.http('post', `${endpoint}/sdapi/v1/txt2img`, {
                 timeout: timeOut,
                 headers: header1,
@@ -268,14 +280,16 @@ export function apply(ctx: Context, config: Config) {
             let imgBase: string = response.data.images[0];
             // log.debug(image); // 开发其他平台时做参考
 
-            // 聊天记录
+
+            //// 聊天记录 ////
             const attrs: Dict<any, string> = {
               userId: session.userId,
               nickname: session.author?.nick || session.username,
             };
             const msgCol = h('figure');
 
-            // 审核
+
+            //// 审核 ////
             let response2: HTTP.Response<any>
             let imgBuffer: Buffer
             if (censor) {
@@ -310,23 +324,23 @@ export function apply(ctx: Context, config: Config) {
             } else imgBuffer = Buffer.from(imgBase, 'base64');
 
 
-            if (outMeth === '关键信息') {
-              msgCol.children.push(h('message', attrs, `使用 ${servers.indexOf(endpoint)}号 服务器`));
-              msgCol.children.push(h('message', attrs, `步数:${steps}\n尺寸:${size[0]}×${size[1]}\n服从度:${cfg}\n采样器:${smpName}\n调度器:${schName}`));
-              if (_ !== '') msgCol.children.push(h('message', attrs, `正向提示词:\n${prompt}`));
-              if (options?.negative !== '') msgCol.children.push(h('message', attrs, `负向提示词:\n${negativePrompt}`));
-            }
-
-            // log.debug(response.data);
+            //// 输出 ////
             if (outMeth === '仅图片') return h.img(imgBuffer, 'image/png');
             else {
               msgCol.children.push(h.img(imgBuffer, 'image/png'));
+              if (outMeth === '关键信息') {
+                msgCol.children.push(h('message', attrs, `使用 ${servers.indexOf(endpoint)}号 服务器`));
+                msgCol.children.push(h('message', attrs, `步数:${steps}\n尺寸:${size[0]}×${size[1]}\n服从度:${cfg}\n采样器:${smpName}\n调度器:${schName}`));
+                if (_ !== '') msgCol.children.push(h('message', attrs, `正向提示词:\n${prompt}`));
+                if (options?.negative !== '') msgCol.children.push(h('message', attrs, `负向提示词:\n${negativePrompt}`));
+              }
               if (outMeth === '详细信息') {
                 msgCol.children.push(h('message', attrs, JSON.stringify(response.data.parameters, null, 4)))
                 msgCol.children.push(h('message', attrs, JSON.stringify(response2.data.detections, null, 4)));
               };
               return msgCol;
             }
+
           } catch (error) {
             log.error('生成图片出错:', error);
             if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
@@ -363,6 +377,8 @@ export function apply(ctx: Context, config: Config) {
         ]));
       }
     });
+
+
 
 
   // 注册 Endpoint Interrogate 指令
@@ -419,7 +435,7 @@ export function apply(ctx: Context, config: Config) {
           session.send(`在推了在推了，不过前面还有 ${taskNum} 个任务……`)
         }
 
-        // 调用 Interrogateapi
+        // Interrogateapi
         async function process() {
           const { tagger, threshold } = config.WD;
 
@@ -479,6 +495,8 @@ export function apply(ctx: Context, config: Config) {
     });
 
 
+
+
   // 注册 Interruptapi 指令
   ctx.command('sd').subcommand('sdstop <server_number:number>', '中断当前操作')
     .action(async ({ }, server_number) => {
@@ -488,7 +506,7 @@ export function apply(ctx: Context, config: Config) {
 
         const endpoint = servers[server_number];
 
-        // 调用 Interruptapi
+        // Interruptapi
         const response = await ctx.http('post', `${endpoint}/sdapi/v1/interrupt`, {
         });
 
@@ -503,6 +521,8 @@ export function apply(ctx: Context, config: Config) {
         });
       }
     });
+
+
 
 
   // 注册 GetModels 指令
@@ -686,6 +706,8 @@ export function apply(ctx: Context, config: Config) {
     });
 
 
+
+
   // 注册 Set Config 指令
   ctx.command('sd').subcommand('sdset <configData>', '修改SD全局设置', {
     checkUnknown: true,
@@ -740,6 +762,8 @@ export function apply(ctx: Context, config: Config) {
         session.send('管理员未启用该设置');
       }
     });
+
+
 
 
   // 列出可用的基础设置
