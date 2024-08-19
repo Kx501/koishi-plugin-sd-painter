@@ -229,7 +229,7 @@ export const Config: Schema<Config> = Schema.intersect([
       Schema.union([
         Schema.object({
           enable: Schema.const(true).required(),
-          endpoint: Schema.string().default('http://127.0.0.1:5000').description('审核系统地址'),
+          endpoint: Schema.string().default('http://127.0.0.1:15000').description('审核系统地址'),
           labels: Schema.array(Schema.union(labelL)).role('select').default(['FEMALE_BREAST_EXPOSED', 'ANUS_EXPOSED', 'FEMALE_GENITALIA_EXPOSED', 'MALE_GENITALIA_EXPOSED']).description('选择审核内容'),
           mask: Schema.intersect([
             Schema.object({

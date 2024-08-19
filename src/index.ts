@@ -86,7 +86,7 @@ export function apply(ctx: Context, config: Config) {
     .option('noNegativeTags', '-N 禁用默认负向提示词')
     .option('noHiresFix', '-H 禁用高分辨率修复')
     // .option('restoreFaces', '-R 禁用人脸修复')
-    .option('noAdetailer', '-A 禁用Adetailer')
+    .option('noAdetailer', '-A 禁用ADetailer')
     .option('noTranslate', '-T 禁用翻译')
     .option('model', '-m <model_name> 单次切换SD模型')
     .option('vae', '-v <vae_name> 单次切换Vae模型')
@@ -249,8 +249,8 @@ export function apply(ctx: Context, config: Config) {
             enable_hr: true,
             hr_upscaler: hiresAlgorithm,
             ...(hrFixType === '比例放大' ? { hr_scale: hiresScale } : { hr_resize_x: hrResizeX, hr_resize_y: hrResizeY }),
-            denoising_strength: hiresDenoising,
-            hr_second_pass_steps: hiresSteps
+            ...(hiresDenoising !== 0 && { denoising_strength: hiresDenoising }),
+            ...(hiresSteps !== 0 && { hr_second_pass_steps: hiresSteps }),
           }),
           save_images: save,
           ...(initImages && { init_images: [initImages] })
@@ -324,7 +324,7 @@ export function apply(ctx: Context, config: Config) {
                 },
               }
 
-              session.send('进入审核阶段...');
+              session.send('审核中……');
               response2 = await ctx.http('POST', `${cEndpoint}/detect`, {
                 timeout: timeOut,
                 data: payload3,
