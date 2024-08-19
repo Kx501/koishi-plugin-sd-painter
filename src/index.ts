@@ -130,7 +130,7 @@ export function apply(ctx: Context, config: Config) {
         // 检查图生图参数
         let initImages = options?.img2img;
         if (options.hasOwnProperty('img2img')) {
-          log.debug('获取图片...');
+          log.debug('获取图片......');
           const hasProtocol = (imgUrl: string): boolean => /^(https?:\/\/)/i.test(imgUrl);
           if (!hasProtocol(initImages)) {
             if (session.platform === 'onebot')
@@ -267,12 +267,12 @@ export function apply(ctx: Context, config: Config) {
           session.send(Random.pick([
             '在画了在画了',
             '你就在此地不要走动，等我给你画一幅',
-            '少女绘画中……',
+            '少女绘画中......',
             '正在创作中，请稍等片刻',
             '笔墨已备好，画卷即将展开'
           ]))
         } else {
-          session.send(`在画了在画了，不过前面还有 ${taskNum} 个任务……`)
+          session.send(`在画了在画了，不过前面还有 ${taskNum} 个任务......`)
         }
 
         //// 调用绘画API ////
@@ -324,7 +324,7 @@ export function apply(ctx: Context, config: Config) {
                 },
               }
 
-              session.send('审核中……');
+              session.send('审核中......');
               response2 = await ctx.http('POST', `${cEndpoint}/detect`, {
                 timeout: timeOut,
                 data: payload3,
@@ -390,7 +390,7 @@ export function apply(ctx: Context, config: Config) {
       } else {
         // 超过最大任务数的处理逻辑
         session.send(Random.pick([
-          '等会再约稿吧，我已经忙不过来了……',
+          '等会再约稿吧，我已经忙不过来了......',
           '是数位板没电了，才…才不是我不想画呢！',
           '那你得先教我画画（理直气壮',
         ]));
@@ -446,12 +446,13 @@ export function apply(ctx: Context, config: Config) {
 
         if (taskNum === 0) {
           session.send(Random.pick([
-            '开始反推提示词...',
-            '在推了在推了...让我仔细想想...',
-            '我在想想想了...',
+            '开始反推提示词......',
+            '在推了在推了......',
+            '让我仔细想想......',
+            '我在想想想了......',
           ]))
         } else {
-          session.send(`在推了在推了，不过前面还有 ${taskNum} 个任务……`)
+          session.send(`在推了在推了，不过前面还有 ${taskNum} 个任务......`)
         }
 
         // Interrogateapi
@@ -605,7 +606,7 @@ export function apply(ctx: Context, config: Config) {
 
           const result = models.map((model: { filename: string; model_name: string; }) => {
             const fileName = extractFileName(model.filename);
-            return `模型名称: ${model.model_name}\n文件名: ${fileName}`;
+            return `模型: ${model.model_name}\n文件: ${fileName}`;
           }).join('\n\n');
 
           if (result) {
@@ -620,28 +621,33 @@ export function apply(ctx: Context, config: Config) {
               try {
                 log.debug('调用切换模型 API');
                 const payload = {
+                  steps: 1,
                   override_settings: {
+                    steps: 1,
+                    width: 16,
+                    height: 16,
                     ...(sdName && { sd_model_checkpoint: _1 }),
                     ...(vaeName && { sd_vae: _2 }),
                   },
                   override_settings_restore_afterwards: false,
                 }
 
-                session.send('模型切换中...')
+                session.send('模型切换中......')
 
-                const response = await ctx.http('post', `${endpoint}/sdapi/v1/img2img`, {
+                const response = await ctx.http('post', `${endpoint}/sdapi/v1/text2img`, {
                   headers: header1,
                   data: payload
                 });
                 log.debug('切换模型API响应状态:', response.statusText);
 
-                return '模型更换成功'
+                if (response.status === 200) return '模型更换成功'; else return `模型更换失败: ${response.statusText}`;
               } catch (error) {
                 log.error('切换模型时出错:', error);
                 return `切换模型时出错: ${error.message}`;
               }
             }
 
+            taskNum++;
             session.send(await process());
             taskNum--;
           }
@@ -677,7 +683,7 @@ export function apply(ctx: Context, config: Config) {
 
           const result = hybNets.map((hn: { filename: string; model_name: string }) => {
             const filename = extractFileName(hn.filename);
-            return `模型名称: ${hn.model_name}\n文件名: ${filename}`;
+            return `模型: ${hn.model_name}\n文件: ${filename}`;
           }).join('\n\n');
 
           if (result) {
@@ -694,7 +700,7 @@ export function apply(ctx: Context, config: Config) {
 
           const result = loras.map((lora: { filename: string; model_name: string; }) => {
             const fileName = extractFileName(lora.filename);
-            return `模型名称: ${lora.model_name}\n文件名: ${fileName}`;
+            return `模型: ${lora.model_name}\n文件: ${fileName}`;
           }).join('\n\n');
 
           if (result) {
@@ -709,7 +715,7 @@ export function apply(ctx: Context, config: Config) {
           log.debug('查询WD模型API响应状态:', response.statusText);
           const models = response.data.models;
 
-          const result = models.map((modelName: string) => `模型名称: ${modelName}`).join('\n\n');
+          const result = models.map((modelName: string) => `模型: ${modelName}`).join('\n\n');
           if (result) {
             msgCol.children.push(h('message', attrs, result));
             return msgCol;
