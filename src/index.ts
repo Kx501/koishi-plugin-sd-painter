@@ -338,7 +338,7 @@ export function apply(ctx: Context, config: Config) {
                   session.send('图片违规');
                   return; // 阻止图片输出
                 }
-                imgBuffer = Buffer.from(response2.data.image[0], 'base64');
+                imgBuffer = Buffer.from(response2.data.image, 'base64');
               } else imgBuffer = Buffer.from(imgBase, 'base64');
             } else imgBuffer = Buffer.from(imgBase, 'base64');
 
