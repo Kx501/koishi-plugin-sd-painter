@@ -23,8 +23,7 @@ export const usage = `
 1. 子指令只能直接调用
 2. 默认使用的是秋葉整合包
 3. 翻译服务默认百度翻译
-4. 使用dvc服务之前需要添加人格 **提示词增强**
-5. 默认指令较多，建议在指令管理中个性化配置
+4. 默认指令较多，建议在指令管理中个性化配置
 `;
 
 // 插件主函数
@@ -41,7 +40,6 @@ export function apply(ctx: Context, config: Config) {
 
   const { timeOut, outputMethod: outMeth, maxTasks } = config;
   const { sampler, scheduler } = config.IMG;
-  const useTrans = config.useTranslation.enable;
   const monetary = config.monetary.enable;
   const { enable: censor, endpoint: cEndpoint, labels } = config.censor;
   const { enable: mask, type: maskType, color, maskShape, maskScale, blurStrength, gradualRatio } = config.censor?.mask ?? {};
@@ -117,6 +115,7 @@ export function apply(ctx: Context, config: Config) {
         const { enable: enableHiresFix, hrUpscaler, hrSecondPassSteps: hrSteps, denoisingStrength, fixWay } = config.IMG?.hiresFix
         const { type: hiresFixType, hrScale, hrResizeX, hrResizeY } = fixWay ?? {}
         const adEnable = config.AD.ADetailer.enable;
+        const useTrans = config.useTranslation.enable;
 
         // 选择服务器
         let endpoint = selectServer();

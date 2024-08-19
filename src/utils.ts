@@ -1,4 +1,4 @@
-import { Context, Session, Logger } from 'koishi';
+import { Context, Session } from 'koishi';
 import { } from '@koishijs/translator'
 import { } from 'koishi-plugin-davinci-003'
 import { Config, log } from './config';
@@ -13,7 +13,49 @@ export async function promptHandle(ctx: Context, session: Session, config: Confi
   const { maxPrompt, excessHandle } = config;
   text = formatInput(text);
 
-  // 通用格式化逻辑，格式化传入提示词
+
+  //// 翻译环节 ////
+  const { text: dvcrole, rollbackPrompt } = config.useDVC;
+  // 检查开关
+  if (trans) {
+    if (!ctx.translator) throw new Error('请先安装translator服务');
+    let txt = await translateZH(text);
+    if (dvc) {
+      const TransTXT = txt; // 中间量
+      txt = await ctx.dvc.chat_with_gpt([{
+        role: 'system',
+        content: `${TransTXT}\n${dvcrole}`
+      }])
+      if (rollbackPrompt) txt = TransTXT + ',' + txt;
+    }
+    text = txt.split(',');
+  }
+
+
+  //// 裁剪 ////
+  if (maxPrompt && text.length > maxPrompt) {
+    const exceedingPart = text.length - maxPrompt;
+    if (exceedingPart > 0) {
+      log.debug('提示词长度过长');
+      switch (excessHandle) {
+        case '仅提示':
+          session.send('提示词长度过长');
+          break;
+        case '从前删除':
+          text = text.slice(exceedingPart);
+          break;
+        case '从后删除':
+          text = text.slice(0, maxPrompt);
+          break;
+      }
+    }
+  }
+
+  return text.join(',');
+
+
+
+  // 格式化函数
   function formatInput(text: string): string[] {
     // 计算 ',' 和 '，' 的数量
     const commaCount = (text.match(/,/g) || []).length;
@@ -32,30 +74,6 @@ export async function promptHandle(ctx: Context, session: Session, config: Confi
     log.debug('格式化完成:', JSON.stringify(parts)); // 调试输出格式化结果
     return parts;
   }
-
-  if (!maxPrompt) {
-    const exceedingPart = text.length - maxPrompt;
-    if (exceedingPart > 0) {
-      switch (excessHandle) {
-        case '仅提示':
-          session.send('提示词长度超限');
-          break;
-        case '从前删除':
-          text = text.slice(exceedingPart);
-          break;
-        case '从后删除':
-          text = text.slice(0, maxPrompt);
-          break;
-      }
-    }
-  }
-
-
-  //// 翻译环节 ////
-  // 检查开关
-  if (!trans) return text.join(',');
-  else if (!ctx.translator) return '请先安装translator服务';
-  else return await translateZH(text);
 
 
 
@@ -100,19 +118,10 @@ export async function promptHandle(ctx: Context, session: Session, config: Confi
       }
     });
 
-    let txt = text.join(',');
-    txt = await ctx.dvc.chat_with_gpt([{
-      role: 'system',
-      content: `${txt}
-这些英文标签描述了一幅画面，请你想象这幅画面并用更多标签描述它，
-用碎片化的单词标签而不是句子去描述这幅画，描述词尽量丰富，
-每个标签之间用逗号分隔，例如在描述白发猫娘的时候，你应该用: white hair,cat girl,cat ears,cute girl,beautiful,lovely 等英文词汇标签。
-你只需要告诉我标签，不要说多余的话。`
-    }])
-
-    return txt;
+    return text.join(',');
   }
 }
+
 
 
 // 代词修正

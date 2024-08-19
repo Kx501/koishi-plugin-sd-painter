@@ -65,6 +65,7 @@ export interface Config {
   useDVC: {
     enable?: boolean;
     text?: string;
+    rollbackPrompt?: boolean;
   };
   maxTasks: number; // 最大任务数
   monetary: {
@@ -99,22 +100,22 @@ export const Config: Schema<Config> = Schema.intersect([
   }).description('基础设置'),
   Schema.object({
     IMG: Schema.object({
-      save: Schema.boolean().default(false).description('是否保存图片到本地'),
-      sampler: Schema.union(samplerL).default('DPM++ SDE').description('采样器选择'),
-      scheduler: Schema.union(schedulerL).default('Automatic').description('调度器选择'),
-      imgSize: Schema.tuple([Number, Number]).default([512, 512]).description(`默认宽度和高度(16的倍数)
+      save: Schema.boolean().default(false).description('SD后端保存图片'),
+      sampler: Schema.union(samplerL).default('DPM++ SDE').description('采样器'),
+      scheduler: Schema.union(schedulerL).default('Automatic').description('调度器'),
+      imgSize: Schema.tuple([Number, Number]).default([512, 512]).description(`宽度和高度(16的倍数)
   - 模板：
   - 256x256、512x512、512x768、832x1216、1024x1024、1280x720、1920x1080
   `),
       cfgScale: Schema.number().min(0).max(30).step(0.1).role('slider').default(7).description('引导系数，用于控制图像对提示词服从程度'),
-      txt2imgSteps: Schema.number().min(1).max(150).step(1).role('slider').default(20).description('文生图默认采样步数'),
-      img2imgSteps: Schema.number().min(1).max(150).step(1).role('slider').default(20).description('图生图默认采样步数'),
-      maxSteps: Schema.number().min(1).max(150).step(1).role('slider').default(40).description('最大允许采样步数'),
+      txt2imgSteps: Schema.number().min(1).max(150).step(1).role('slider').default(20).description('文生图步数'),
+      img2imgSteps: Schema.number().min(1).max(150).step(1).role('slider').default(20).description('图生图步数'),
+      maxSteps: Schema.number().min(1).max(150).step(1).role('slider').default(40).description('最大允许步数'),
       prompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认正向提示词'),
       negativePrompt: Schema.string().role('textarea', { rows: [2, 8] }).default('').description('默认负向提示词'),
       prePrompt: Schema.boolean().default(true).description('默认正向提示词是否放在最前面'),
       preNegPrompt: Schema.boolean().default(true).description('默认负向提示词是否放在最前面'),
-      restoreFaces: Schema.boolean().default(false).description('是否启用人脸修复').disabled(),
+      restoreFaces: Schema.boolean().default(false).description('人脸修复').disabled(),
       hiresFix: Schema.intersect([
         Schema.object({
           enable: Schema.boolean().default(false).description('高分辨率修复'),
@@ -152,7 +153,7 @@ export const Config: Schema<Config> = Schema.intersect([
     AD: Schema.object({
       ADetailer: Schema.intersect([
         Schema.object({
-          enable: Schema.boolean().default(false).description('使用ADetailer修复'),
+          enable: Schema.boolean().default(false).description('ADetailer修复'),
         }),
         Schema.union([
           Schema.object({
@@ -176,7 +177,7 @@ export const Config: Schema<Config> = Schema.intersect([
   }).description('修复设置'),
   Schema.object({
     WD: Schema.object({
-      tagger: Schema.union(wd_modelL).default('wd14-vit-v2-git').description('反推模型选择'),
+      tagger: Schema.union(wd_modelL).default('wd14-vit-v2-git').description('反推模型'),
       threshold: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.3).description('输出提示词的置信度'),
       imgCensor: Schema.intersect([
         Schema.object({
@@ -197,17 +198,17 @@ export const Config: Schema<Config> = Schema.intersect([
     outputMethod: Schema.union(['仅图片', '关键信息', '详细信息']).default('仅图片').description('输出方式，"详细信息"仅用于调试，且*审核将失效*'),
     maxPrompt: Schema.number().min(0).max(200).step(1).role('slider').default(0).description('最大提示词数限制，设置为0关闭'),
     excessHandle: Schema.union(['仅提示', '从前删除', '从后删除']).default('从后删除').description('提示词超限处理'),
-    setConfig: Schema.boolean().default(false).description('是否启用指令修改SD全局设置'),
+    setConfig: Schema.boolean().default(false).description('启用指令修改SD全局设置'),
   }).description('其他设置'),
   Schema.object({
     useTranslation: Schema.intersect([
       Schema.object({
-        enable: Schema.boolean().default(false).description('是否启用翻译服务处理非英文提示词'),
+        enable: Schema.boolean().default(false).description('翻译非英文提示词'),
       }),
       Schema.union([
         Schema.object({
           enable: Schema.const(true).required(),
-          pronounCorrect: Schema.boolean().default(false).description('启用翻译后代词修正').experimental(),
+          pronounCorrect: Schema.boolean().default(false).description('翻译后代词修正').experimental(),
         }),
         Schema.object({}),
       ]),
@@ -219,7 +220,8 @@ export const Config: Schema<Config> = Schema.intersect([
       Schema.union([
         Schema.object({
           enable: Schema.const(true).required(),
-          text: Schema.string().description('发送给GPT的第一条消息'),
+          text: Schema.string().role('textarea', { rows: [2, 8] }).default('这些英文标签描述了一幅画面，请你想象这幅画面并补充更多标签描述它，用碎片化的单词标签而不是句子去描述这幅画，描述词尽量丰富，每个标签之间用逗号分隔，例如在描述白发猫娘的时候，你应该用: white hair,cat girl,cat ears,cute girl,beautiful,lovely 等英文词汇标签。你只需要告诉我标签，不要说多余的话。').description('发送给GPT的第一条消息'),
+          rollbackPrompt: Schema.boolean().default(true).description('防止GPT不加上之前的提示词'),
         }),
         Schema.object({}),
       ])
@@ -227,29 +229,29 @@ export const Config: Schema<Config> = Schema.intersect([
     maxTasks: Schema.number().min(0).default(3).description('最大任务数限制，设置为0关闭'),
     monetary: Schema.intersect([
       Schema.object({
-        enable: Schema.boolean().default(false).description('是否启用经济系统'),
+        enable: Schema.boolean().default(false).description('启用经济系统'),
       }),
       Schema.union([
         Schema.object({
           enable: Schema.const(true).required(),
-          sd: Schema.number().min(0).max(200).step(1).role('slider').default(20).description('绘画启用经济，设置为0关闭'),
-          wd: Schema.number().min(0).max(200).step(1).role('slider').default(10).description('反推启用经济，设置为0关闭'),
+          sd: Schema.number().min(0).max(200).step(1).role('slider').default(20).description('绘画费用，设置为0关闭'),
+          wd: Schema.number().min(0).max(200).step(1).role('slider').default(10).description('反推费用，设置为0关闭'),
         }),
         Schema.object({})
       ]),
     ]),
     censor: Schema.intersect([
       Schema.object({
-        enable: Schema.boolean().default(false).description('是否对接外部审核系统'),
+        enable: Schema.boolean().default(false).description('对接外部审核系统').experimental(),
       }),
       Schema.union([
         Schema.object({
           enable: Schema.const(true).required(),
           endpoint: Schema.string().default('http://127.0.0.1:15000').description('审核系统地址'),
-          labels: Schema.array(Schema.union(labelL)).role('select').default(['FEMALE_BREAST_EXPOSED', 'ANUS_EXPOSED', 'FEMALE_GENITALIA_EXPOSED', 'MALE_GENITALIA_EXPOSED']).description('选择审核内容'),
+          labels: Schema.array(Schema.union(labelL)).role('select').default(['FEMALE_BREAST_EXPOSED', 'ANUS_EXPOSED', 'FEMALE_GENITALIA_EXPOSED', 'MALE_GENITALIA_EXPOSED']).description('审核内容'),
           mask: Schema.intersect([
             Schema.object({
-              enable: Schema.boolean().default(false).description('是否启用遮罩处理'),
+              enable: Schema.boolean().default(false).description('使用遮罩处理'),
             }),
             Schema.union([
               Schema.intersect([
@@ -298,7 +300,7 @@ export const Config: Schema<Config> = Schema.intersect([
     ]),
     closingMode: Schema.intersect([
       Schema.object({
-        enable: Schema.boolean().default(false).description('开启打烊模式，维护用'),
+        enable: Schema.boolean().default(false).description('打烊模式，维护用'),
       }),
       Schema.union([
         Schema.object({
