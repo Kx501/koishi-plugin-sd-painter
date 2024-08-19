@@ -62,6 +62,10 @@ export interface Config {
     enable?: boolean; // 是否使用翻译服务
     pronounCorrect?: boolean; //修正翻译后代词
   };
+  useDVC: {
+    enable?: boolean;
+    text?: string;
+  };
   maxTasks: number; // 最大任务数
   monetary: {
     enable?: boolean; // 启用经济系统
@@ -207,6 +211,18 @@ export const Config: Schema<Config> = Schema.intersect([
         }),
         Schema.object({}),
       ]),
+    ]),
+    useDVC: Schema.intersect([
+      Schema.object({
+        enable: Schema.boolean().default(false).description('使用DVC服务扩写提示词'),
+      }),
+      Schema.union([
+        Schema.object({
+          enable: Schema.const(true).required(),
+          text: Schema.string().description('发送给GPT的第一条消息'),
+        }),
+        Schema.object({}),
+      ])
     ]),
     maxTasks: Schema.number().min(0).default(3).description('最大任务数限制，设置为0关闭'),
     monetary: Schema.intersect([

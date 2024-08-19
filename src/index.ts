@@ -7,7 +7,7 @@ import { samplerL, schedulerL, ad_modelL, wd_modelL } from './list';
 export const name = 'sd-webui-api';
 export const inject = {
   required: ['http'],
-  optional: ['translator', 'database', 'monetary']
+  optional: ['translator', 'dvc', 'database', 'monetary']
 }
 export * from './config'
 
@@ -23,7 +23,8 @@ export const usage = `
 1. 子指令只能直接调用
 2. 默认使用的是秋葉整合包
 3. 翻译服务默认百度翻译
-4. 默认指令较多，建议在指令管理中个性化配置
+4. 使用dvc服务之前需要添加人格 **提示词增强**
+5. 默认指令较多，建议在指令管理中个性化配置
 `;
 
 // 插件主函数
@@ -68,6 +69,7 @@ export function apply(ctx: Context, config: Config) {
 
 
   // 注册 text2img/img2img 指令
+  // k l m q u w y
   ctx.command('sd [tags]', 'AI画图，若提示词有空格，首尾用引号括起来')
     .option('negative', '-n <tags> 负向提示词，若有空格，首尾用引号括起来')
     .option('img2img', '-i [imgURL] 图生图，@图片或输入链接，放在参数末尾')
@@ -75,21 +77,22 @@ export function apply(ctx: Context, config: Config) {
     .option('cfgScale', '-c <float> 提示词服从度')
     .option('size', '-z <宽x高> 图像尺寸')
     .option('seed', '-e <number> 随机种子')
-    .option('sampler', '-l <name> 采样器')
+    .option('sampler', '-p <name> 采样器')
     .option('scheduler', '-d <name> 调度器')
     .option('fixAlgorithm', '-f <name> 高分辨率修复算法')
     .option('secondPassSteps', '-b <number> 修复步数')
     .option('denoisingStrength', '-o <float> 修复降噪强度')
     .option('hrScale', '-r <float> 修复比例')
+    .option('dvc', '-v 扩写提示词')
     .option('server', '-x <number> 指定服务器编号')
-    .option('noPositiveTags', '-P 禁用默认正向提示词')
-    .option('noNegativeTags', '-N 禁用默认负向提示词')
+    .option('noPositiveTags', '-G 禁用默认正向提示词')
+    .option('noNegativeTags', '-J 禁用默认负向提示词')
     .option('noHiresFix', '-H 禁用高分辨率修复')
     // .option('restoreFaces', '-R 禁用人脸修复')
     .option('noAdetailer', '-A 禁用ADetailer')
     .option('noTranslate', '-T 禁用翻译')
-    .option('model', '-m <model_name> 单次切换SD模型')
-    .option('vae', '-v <vae_name> 单次切换Vae模型')
+    // .option('model', '-m <model_name> 单次切换SD模型')
+    // .option('vae', '-v <vae_name> 单次切换Vae模型')
     .action(async ({ options, session }, _) => {
       if (!maxTasks || taskNum < maxTasks) {
         log.debug('调用绘图 API');
@@ -153,8 +156,9 @@ export function apply(ctx: Context, config: Config) {
         const noPosTags = options?.noPositiveTags;
         const noNegTags = options?.noNegativeTags;
         const Trans = useTrans && !options?.noTranslate;
-        const modelName = options?.model;
-        const vaeName = options?.vae;
+        const DVC = options?.dvc && config.useDVC.enable;
+        // const modelName = options?.model;
+        // const vaeName = options?.vae;
         const hiresFix = !options?.img2img && !options.noHiresFix && enableHiresFix;
         const hiresAlgorithm = options?.fixAlgorithm || hrUpscaler;
         const hrFixType = options?.hrScale ? '比例放大' : hiresFixType;
@@ -165,8 +169,8 @@ export function apply(ctx: Context, config: Config) {
         // 翻译
         let tmpPrompt = _;
         let tmpNegPrompt = options?.negative;
-        tmpPrompt = await promptHandle(ctx, session, config, tmpPrompt, Trans);
-        tmpNegPrompt = await promptHandle(ctx, session, config, tmpNegPrompt, Trans);
+        tmpPrompt = await promptHandle(ctx, session, config, tmpPrompt, Trans, DVC);
+        tmpNegPrompt = await promptHandle(ctx, session, config, tmpNegPrompt, Trans, DVC);
 
         // 确定位置
         let { prompt, negativePrompt } = config.IMG;
@@ -204,8 +208,8 @@ export function apply(ctx: Context, config: Config) {
           await Promise.all(config.AD.ADetailer.models.map(async model => {
             log.debug('处理ADetailer参数...');
             // ADetailer翻译
-            let ADPrompt = await promptHandle(ctx, session, config, model.prompt, Trans);
-            let ADNegPrompt = await promptHandle(ctx, session, config, model.negativePrompt, Trans);
+            let ADPrompt = await promptHandle(ctx, session, config, model.prompt, Trans, DVC);
+            let ADNegPrompt = await promptHandle(ctx, session, config, model.negativePrompt, Trans, DVC);
 
             const tmpPayload = {
               ad_model: model.name,
@@ -239,12 +243,12 @@ export function apply(ctx: Context, config: Config) {
           ...((prompt !== '' || negativePrompt !== '') && { cfg_scale: cfg }),
           width: size[0],
           height: size[1],
-          ...((modelName || vaeName) && {
-            override_settings: {
-              ...(modelName && { sd_model_checkpoint: modelName }),
-              ...(vaeName && { sd_vae: vaeName }),
-            }
-          }),
+          // ...((modelName || vaeName) && {
+          //   override_settings: {
+          //     ...(modelName && { sd_model_checkpoint: modelName }),
+          //     ...(vaeName && { sd_vae: vaeName }),
+          //   }
+          // }),
           ...(hiresFix && {
             enable_hr: true,
             hr_upscaler: hiresAlgorithm,
