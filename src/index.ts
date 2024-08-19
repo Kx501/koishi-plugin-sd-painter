@@ -621,20 +621,14 @@ export function apply(ctx: Context, config: Config) {
               try {
                 log.debug('调用切换模型 API');
                 const payload = {
-                  steps: 1,
-                  override_settings: {
-                    steps: 1,
-                    width: 16,
-                    height: 16,
-                    ...(sdName && { sd_model_checkpoint: _1 }),
-                    ...(vaeName && { sd_vae: _2 }),
-                  },
-                  override_settings_restore_afterwards: false,
+                  ...(sdName && { sd_model_checkpoint: _1 }),
+                  ...(vaeName && { sd_vae_checkpoint: _2 }),
                 }
 
                 session.send('模型切换中......')
 
-                const response = await ctx.http('post', `${endpoint}/sdapi/v1/text2img`, {
+                const response = await ctx.http('post', `${endpoint}/sdapi/v1/options`, {
+                  timeout: timeOut,
                   headers: header1,
                   data: payload
                 });
