@@ -4,16 +4,15 @@ import { } from 'koishi-plugin-davinci-003'
 import { Config, log } from './config';
 
 
-export async function promptHandle(ctx: Context, session: Session, config: Config, text?: any, trans?: boolean, dvc?: boolean): Promise<string> {
-  //// 格式化 ////
+export async function promptHandle(ctx: Context, session: Session, config: Config, inputStr?: string, trans?: boolean, dvc?: boolean): Promise<string> {
   // 检查输入是否有效
-  if (!text || typeof text !== 'string') return '';
+  if (inputStr === '') return '';
 
   const { maxPrompt, excessHandle } = config;
   const { text: dvcrole, rollbackPrompt } = config.useDVC;
 
-  // 函数功能实现
-  text = formatInput(text);
+  //// 格式化 ////
+  let text = formatInput(inputStr);
 
 
   //// GPT增强 ////
@@ -75,6 +74,12 @@ export async function promptHandle(ctx: Context, session: Session, config: Confi
 
     // 使用 ',' 分割字符串，并去除每个部分的前导空格
     const parts = text.split(',').map((part) => part.trimStart());
+
+    // 如果只有一个元素，并且这个元素不为空字符串，则将其包装成数组
+    if (parts.length === 1 && parts[0] !== '') {
+      return [parts[0]];
+    }
+
     log.debug('格式化完成:', JSON.stringify(parts)); // 调试输出格式化结果
     return parts;
   }
@@ -82,7 +87,7 @@ export async function promptHandle(ctx: Context, session: Session, config: Confi
 
 
   // 翻译函数
-  async function translateZH(text: string[]) {
+  async function translateZH(text: string[]): Promise<string[]> {
     // 提取含有中文的数组元素及其索引
     const chineseParts = [];
     const indices = [];
@@ -95,7 +100,7 @@ export async function promptHandle(ctx: Context, session: Session, config: Confi
     });
 
     if (chineseParts.length === 0) {
-      return text.join(','); // 没有中文部分，直接返回字符串
+      return text; // 没有中文部分
     }
 
     // 将中文部分合并为一个字符串

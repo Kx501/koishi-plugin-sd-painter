@@ -166,31 +166,31 @@ export function apply(ctx: Context, config: Config) {
         const hiresScale = options?.hrScale || hrScale;
 
         // 翻译
-        let tmpPrompt = _;
-        let tmpNegPrompt = options?.negative;
+        let tmpPrompt = _ || '';
+        let tmpNegPrompt = options?.negative || '';
         tmpPrompt = await promptHandle(ctx, session, config, tmpPrompt, Trans, DVC);
         tmpNegPrompt = await promptHandle(ctx, session, config, tmpNegPrompt, Trans, DVC);
 
         // 确定位置
         let { prompt, negativePrompt } = config.IMG;
         if (!noPosTags && prompt) {
-          if (prePrompt && prompt) {
-            if (!prompt.endsWith(',')) prompt += ',';
-            prompt += tmpPrompt;
-            tmpPrompt = prompt;
-          } else {
-            if (!tmpPrompt.endsWith(',')) tmpPrompt += ',';
-            tmpPrompt += prompt;
+          if (tmpPrompt === '') tmpPrompt = prompt;
+          else {
+            // 确定字符串之间是否需要逗号
+            const needsComma = prePrompt ? !prompt.endsWith(',') : !tmpPrompt.endsWith(',');
+            const comma = needsComma ? ',' : '';
+            // 连接
+            tmpPrompt = prePrompt ? prompt + comma + tmpPrompt : tmpPrompt + comma + prompt;
           }
         }
         if (!noNegTags && negativePrompt) {
-          if (preNegPrompt) {
-            if (!negativePrompt.endsWith(',')) negativePrompt += ',';
-            negativePrompt += tmpNegPrompt;
-            tmpNegPrompt = negativePrompt;
-          } else {
-            if (!tmpNegPrompt.endsWith(',')) tmpNegPrompt += ',';
-            tmpNegPrompt += negativePrompt;
+          if (tmpNegPrompt === '') tmpNegPrompt = negativePrompt;
+          else {
+            // 确定字符串之间是否需要逗号
+            const needsComma = preNegPrompt ? !negativePrompt.endsWith(',') : !tmpNegPrompt.endsWith(',');
+            const comma = needsComma ? ',' : '';
+            // 连接
+            tmpNegPrompt = preNegPrompt ? negativePrompt + comma + tmpNegPrompt : tmpNegPrompt + comma + negativePrompt;
           }
         }
 
