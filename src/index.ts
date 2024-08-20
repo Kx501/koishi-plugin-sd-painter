@@ -353,8 +353,8 @@ export function apply(ctx: Context, config: Config) {
               if (outMeth === '关键信息') {
                 msgCol.children.push(h('message', attrs, `使用 ${servers.indexOf(endpoint)}号 服务器`));
                 msgCol.children.push(h('message', attrs, `步数:${steps}\n尺寸:${size[0]}×${size[1]}\n服从度:${cfg}\n采样器:${smpName}\n调度器:${schName}`));
-                if (_ !== '') msgCol.children.push(h('message', attrs, `正向提示词:\n${tmpPrompt}`));
-                if (options?.negative !== '') msgCol.children.push(h('message', attrs, `负向提示词:\n${tmpNegPrompt}`));
+                if (tmpPrompt) msgCol.children.push(h('message', attrs, `正向提示词:\n${tmpPrompt}`));
+                if (tmpNegPrompt) msgCol.children.push(h('message', attrs, `负向提示词:\n${tmpNegPrompt}`));
               }
               if (outMeth === '详细信息') {
                 msgCol.children.push(h('message', attrs, JSON.stringify(response.data.parameters, null, 4)))
