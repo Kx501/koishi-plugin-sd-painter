@@ -67,35 +67,35 @@ export function apply(ctx: Context, config: Config) {
 
 
   // 注册 text2img/img2img 指令
-  // k l m q u w y
-  ctx.command('sd [tags]', 'AI画图，若提示词有空格，首尾用引号括起来')
-    .option('negative', '-n <tags> 负向提示词，若有空格，首尾用引号括起来')
-    .option('img2img', '-i [imgURL] 图生图，@图片或输入链接，放在参数末尾')
+  // k l q u w y, h不可用
+  ctx.command('sd [tags]', 'AI画图')
+    .option('negative', '-n <tags> 负向提示词')
+    .option('img2img', '-i [imgURL] 图生图，@图片或输入链接')
     .option('steps', '-s <number> 迭代步数')
     .option('cfgScale', '-c <float> 提示词服从度')
     .option('size', '-z <宽x高> 图像尺寸')
     .option('seed', '-e <number> 随机种子')
     .option('sampler', '-p <name> 采样器')
     .option('scheduler', '-d <name> 调度器')
-    .option('fixAlgorithm', '-f <name> 高分辨率修复算法')
+    .option('dvc', '-v 扩写提示词')
+    .option('hiresFix', '-f 高分辨率修复')
+    .option('fixAlgorithm', '-m <name> 高分辨率修复算法')
     .option('secondPassSteps', '-b <number> 修复步数')
     .option('denoisingStrength', '-o <float> 修复降噪强度')
     .option('hrScale', '-r <float> 修复比例')
-    .option('dvc', '-v 扩写提示词')
+    .option('adetailer', '-A ADetailer修复')
     .option('server', '-x <number> 指定服务器编号')
     .option('noPositiveTags', '-G 禁用默认正向提示词')
     .option('noNegativeTags', '-J 禁用默认负向提示词')
-    .option('noHiresFix', '-H 禁用高分辨率修复')
     // .option('restoreFaces', '-R 禁用人脸修复')
-    .option('noAdetailer', '-A 禁用ADetailer')
     .option('noTranslate', '-T 禁用翻译')
     // .option('model', '-m <model_name> 单次切换SD模型')
     // .option('vae', '-v <vae_name> 单次切换Vae模型')
+    .usage('若参数有空格，首尾用引号括起来\n图生图@图片，-i 放在指令末尾')
     .action(async ({ options, session }, _) => {
       if (!maxTasks || taskNum < maxTasks) {
         log.debug('调用绘图 API');
         log.debug('选择子选项:', options);
-
 
         //// 经济系统 ////
         const sdMonetary = config.monetary.sd;
@@ -158,7 +158,7 @@ export function apply(ctx: Context, config: Config) {
         const DVC = options?.dvc && config.useDVC.enable;
         // const modelName = options?.model;
         // const vaeName = options?.vae;
-        const hiresFix = !options?.img2img && !options.noHiresFix && enableHiresFix;
+        const hiresFix = !options?.img2img && options.hiresFix && enableHiresFix;
         const hiresAlgorithm = options?.fixAlgorithm || hrUpscaler;
         const hrFixType = options?.hrScale ? '比例放大' : hiresFixType;
         const hiresSteps = options?.secondPassSteps || hrSteps;
@@ -198,7 +198,7 @@ export function apply(ctx: Context, config: Config) {
         //// 使用 ADetailer ////
         let payload2 = {};
 
-        if (!options?.noAdetailer && adEnable) {
+        if (!options?.adetailer && adEnable) {
           const tmpList: any[] = [
             adEnable,
             false, // true，直接使用原图
