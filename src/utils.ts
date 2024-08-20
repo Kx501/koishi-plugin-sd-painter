@@ -9,26 +9,30 @@ export async function promptHandle(ctx: Context, session: Session, config: Confi
   // 检查输入是否有效
   if (!text || typeof text !== 'string') return '';
 
-  // 函数功能实现
   const { maxPrompt, excessHandle } = config;
+  const { text: dvcrole, rollbackPrompt } = config.useDVC;
+
+  // 函数功能实现
   text = formatInput(text);
 
 
+  //// GPT增强 ////
+  if (dvc) {
+    const TransTXT = text.join(','); // 中间量
+    let txt = await ctx.dvc.chat_with_gpt([{
+      role: 'system',
+      content: `${TransTXT}\n${dvcrole}`
+    }])
+    if (rollbackPrompt) txt = TransTXT + ',' + txt;
+    text = txt.split(',');
+  }
+
+
   //// 翻译环节 ////
-  const { text: dvcrole, rollbackPrompt } = config.useDVC;
   // 检查开关
   if (trans) {
     if (!ctx.translator) throw new Error('请先安装translator服务');
-    let txt = await translateZH(text);
-    if (dvc) {
-      const TransTXT = txt; // 中间量
-      txt = await ctx.dvc.chat_with_gpt([{
-        role: 'system',
-        content: `${TransTXT}\n${dvcrole}`
-      }])
-      if (rollbackPrompt) txt = TransTXT + ',' + txt;
-    }
-    text = txt.split(',');
+    text = await translateZH(text);
   }
 
 
@@ -118,7 +122,7 @@ export async function promptHandle(ctx: Context, session: Session, config: Confi
       }
     });
 
-    return text.join(',');
+    return text;
   }
 }
 
