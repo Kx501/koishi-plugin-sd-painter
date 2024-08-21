@@ -87,7 +87,7 @@ export function apply(ctx: Context, config: Config) {
     .option('secondPassSteps', '-b <number> 修复步数')
     .option('denoisingStrength', '-o <float> 修复降噪强度')
     .option('hrScale', '-r <float> 修复比例')
-    .option('adetailer', '-A ADetailer修复')
+    .option('adetailer', '-a ADetailer 插件修复')
     .option('server', '-x <number> 指定服务器编号')
     .option('noPositiveTags', '-G 禁用默认正向提示词')
     .option('noNegativeTags', '-J 禁用默认负向提示词')
