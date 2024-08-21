@@ -8,13 +8,14 @@
 
 ### 🌟 插件功能
 
-* **功能 1：** 文/图生图
-* **功能 2：** HiresFix 部分功能
-* **功能 3：** WD1.4 Tagger 部分功能
-* **功能 4：** ADetailer 部分功能
-* **功能 5：** 查询/切换模型(未测试)
-* **功能 6：** 修改配置(未测试)
-* **功能 7：** 图片审核(测试版)，见 [imgCensor](https://github.com/Kx501/koishi-plugin-imgcensor)
+* **文/图生图**
+* **中止生成**
+* **HiresFix 部分功能**
+* **WD1.4 Tagger 部分功能**
+* **ADetailer 部分功能**
+* **查询/切换模型(未测试)**
+* **修改配置(未测试)**
+* **图片审核(测试版)，见** [imgCensor](https://github.com/Kx501/koishi-plugin-imgcensor)
 
 ### ⚠️ 注意事项
 
