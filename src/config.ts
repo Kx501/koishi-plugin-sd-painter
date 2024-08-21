@@ -221,7 +221,7 @@ export const Config: Schema<Config> = Schema.intersect([
         Schema.object({
           enable: Schema.const(true).required(),
           text: Schema.string().role('textarea', { rows: [2, 8] }).default('这些标签描绘了一个场景，如果标签是中文，请翻译成英文。请你想象这个场景，并添加更多英文标签来描述它。使用零散的单词或短语，每个标签之间用逗号隔开。比如，在描述一个白发猫娘时，您应该使用: white hair,cat girl,cat ears,cute girl,beautiful,lovely 等英文标签。在回答时，请包含原始标签，并且只需提供标签，无需额外说明。').description('发送给GPT的第一条消息'),
-          rollbackPrompt: Schema.boolean().default(true).description('防止GPT不加上之前的提示词'),
+          rollbackPrompt: Schema.boolean().default(false).description('防止GPT不加上之前的提示词'),
         }),
         Schema.object({}),
       ])
@@ -249,7 +249,7 @@ export const Config: Schema<Config> = Schema.intersect([
           enable: Schema.const(true).required(),
           endpoint: Schema.string().default('http://127.0.0.1:15000').description('审核系统地址'),
           labels: Schema.array(Schema.union(labelL)).role('select').default(['FEMALE_BREAST_EXPOSED', 'ANUS_EXPOSED', 'FEMALE_GENITALIA_EXPOSED', 'MALE_GENITALIA_EXPOSED']).description('审核内容'),
-          threshold: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.4).description('判定敏感阈值'),
+          threshold: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.45).description('判定敏感阈值'),
           mask: Schema.intersect([
             Schema.object({
               type: Schema.union(mask_typeL).default('None').description('遮罩类型'),

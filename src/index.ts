@@ -22,8 +22,9 @@ export const usage = `
 ### 注意事项
 1. 子指令只能直接调用
 2. 默认使用的是秋葉整合包
-3. 翻译服务默认百度翻译
-4. 默认指令较多，建议在指令管理中个性化配置
+3. 翻译服务只测试了 [百度翻译](https://api.fanyi.baidu.com/api/trans/product/desktop)
+4. dvc 只测试了 [DeepSeek](https://github.com/Kx501/koishi-plugin-imgcensor) 效果不错
+5. 默认指令较多，建议在指令管理中个性化配置
 `;
 
 // 插件主函数

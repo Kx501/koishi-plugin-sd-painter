@@ -1,7 +1,7 @@
 {
 	"name": "@kx501/koishi-plugin-sd-webui-api",
 	"description": "对接Stable Diffusion WebUI",
-	"version": "1.0.0-beta7.2",
+	"version": "1.0.0-beta7.2.1",
 	"main": "lib/index.js",
 	"typings": "lib/index.d.ts",
 	"files": [
