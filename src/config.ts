@@ -77,8 +77,8 @@ export interface Config {
     enable?: boolean;
     endpoint?: string;
     labels?: string[];
+    threshold?: number;
     mask?: {
-      enable?: boolean;
       type?: string;
       color?: number[];
       blurStrength?: number;
@@ -96,7 +96,7 @@ export interface Config {
 export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
     endpoint: Schema.array(String).role('table').description('SD-WebUI API的地址，可以填多个').experimental(),
-    timeOut: Schema.number().default(60000).description('请求超时，设置为0关闭').experimental(),
+    timeOut: Schema.number().default(60000).description('请求超时，设置为0关闭，毫秒').experimental(),
   }).description('基础设置'),
   Schema.object({
     IMG: Schema.object({
@@ -220,7 +220,7 @@ export const Config: Schema<Config> = Schema.intersect([
       Schema.union([
         Schema.object({
           enable: Schema.const(true).required(),
-          text: Schema.string().role('textarea', { rows: [2, 8] }).default('这些英文标签描述了一幅画面，请你想象这幅画面并补充更多标签描述它，用碎片化的单词标签而不是句子去描述这幅画，描述词尽量丰富，每个标签之间用逗号分隔，例如在描述白发猫娘的时候，你应该用: white hair,cat girl,cat ears,cute girl,beautiful,lovely 等英文词汇标签。你只需要告诉我标签，不要说多余的话。').description('发送给GPT的第一条消息'),
+          text: Schema.string().role('textarea', { rows: [2, 8] }).default('这些标签描绘了一个场景，如果标签是中文，请翻译成英文。请你想象这个场景，并添加更多英文标签来描述它。使用零散的单词或短语，每个标签之间用逗号隔开。比如，在描述一个白发猫娘时，您应该使用: white hair,cat girl,cat ears,cute girl,beautiful,lovely 等英文标签。在回答时，请包含原始标签，并且只需提供标签，无需额外说明。').description('发送给GPT的第一条消息'),
           rollbackPrompt: Schema.boolean().default(true).description('防止GPT不加上之前的提示词'),
         }),
         Schema.object({}),
@@ -249,48 +249,40 @@ export const Config: Schema<Config> = Schema.intersect([
           enable: Schema.const(true).required(),
           endpoint: Schema.string().default('http://127.0.0.1:15000').description('审核系统地址'),
           labels: Schema.array(Schema.union(labelL)).role('select').default(['FEMALE_BREAST_EXPOSED', 'ANUS_EXPOSED', 'FEMALE_GENITALIA_EXPOSED', 'MALE_GENITALIA_EXPOSED']).description('审核内容'),
+          threshold: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.4).description('判定敏感阈值'),
           mask: Schema.intersect([
             Schema.object({
-              enable: Schema.boolean().default(false).description('使用遮罩处理'),
+              type: Schema.union(mask_typeL).default('None').description('遮罩类型'),
             }),
             Schema.union([
-              Schema.intersect([
-                Schema.object({
-                  enable: Schema.const(true).required(),
-                  type: Schema.union(mask_typeL).default('None').description('遮罩类型'),
-                }),
-                Schema.union([
-                  Schema.object({
-                    type: Schema.const('color_block').required(),
-                    color: Schema.tuple([Number, Number, Number]).default([0, 0, 0]).description('遮罩颜色(B, G, R)'),
-                    gradualRatio: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.2).description('边缘羽化距离'),
-                    maskShape: Schema.union(['rectangle', 'ellipse']).default('ellipse').description('遮罩形状'),
-                    maskScale: Schema.number().min(0).max(3).step(0.01).role('slider').default(1.3).description('遮罩放大尺寸'),
-                  }),
-                  Schema.object({
-                    type: Schema.const('full_color_block').required(),
-                    color: Schema.tuple([Number, Number, Number]).default([0, 0, 0]).description('遮罩颜色(B, G, R)'),
-                  }),
-                  Schema.object({
-                    type: Schema.const('gaussian_blur').required(),
-                    blurStrength: Schema.number().min(0).max(10).step(1).role('slider').default(4).description('模糊强度'),
-                    gradualRatio: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.2).description('边缘羽化距离'),
-                    maskShape: Schema.union(['rectangle', 'ellipse']).default('ellipse').description('遮罩形状'),
-                    maskScale: Schema.number().min(0).max(3).step(0.01).role('slider').default(1.4).description('遮罩放大尺寸'),
-                  }),
-                  Schema.object({
-                    type: Schema.const('full_gaussian_blur').required(),
-                    blurStrength: Schema.number().min(0).max(10).step(1).role('slider').default(7).description('模糊强度'),
-                  }),
-                  Schema.object({
-                    type: Schema.const('mosaic').required(),
-                    blurStrength: Schema.number().min(0).max(10).step(1).role('slider').default(4).description('模糊强度'),
-                    maskShape: Schema.union(['rectangle', 'ellipse']).default('ellipse').description('遮罩形状'),
-                    maskScale: Schema.number().min(0).max(3).step(0.01).role('slider').default(1.3).description('遮罩放大尺寸'),
-                  }),
-                  Schema.object({}),
-                ]),
-              ]),
+              Schema.object({
+                type: Schema.const('color_block').required(),
+                color: Schema.tuple([Number, Number, Number]).default([0, 0, 0]).description('遮罩颜色(B, G, R)'),
+                gradualRatio: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.2).description('边缘羽化距离'),
+                maskShape: Schema.union(['rectangle', 'ellipse']).default('ellipse').description('遮罩形状'),
+                maskScale: Schema.number().min(0).max(3).step(0.01).role('slider').default(1.3).description('遮罩放大尺寸'),
+              }),
+              Schema.object({
+                type: Schema.const('full_color_block').required(),
+                color: Schema.tuple([Number, Number, Number]).default([0, 0, 0]).description('遮罩颜色(B, G, R)'),
+              }),
+              Schema.object({
+                type: Schema.const('gaussian_blur').required(),
+                blurStrength: Schema.number().min(0).max(10).step(1).role('slider').default(4).description('模糊强度'),
+                gradualRatio: Schema.number().min(0).max(1).step(0.01).role('slider').default(0.2).description('边缘羽化距离'),
+                maskShape: Schema.union(['rectangle', 'ellipse']).default('ellipse').description('遮罩形状'),
+                maskScale: Schema.number().min(0).max(3).step(0.01).role('slider').default(1.4).description('遮罩放大尺寸'),
+              }),
+              Schema.object({
+                type: Schema.const('full_gaussian_blur').required(),
+                blurStrength: Schema.number().min(0).max(10).step(1).role('slider').default(7).description('模糊强度'),
+              }),
+              Schema.object({
+                type: Schema.const('mosaic').required(),
+                blurStrength: Schema.number().min(0).max(10).step(1).role('slider').default(4).description('模糊强度'),
+                maskShape: Schema.union(['rectangle', 'ellipse']).default('ellipse').description('遮罩形状'),
+                maskScale: Schema.number().min(0).max(3).step(0.01).role('slider').default(1.3).description('遮罩放大尺寸'),
+              }),
               Schema.object({}),
             ]),
           ]),

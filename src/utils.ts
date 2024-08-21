@@ -23,7 +23,7 @@ export async function promptHandle(ctx: Context, session: Session, config: Confi
       content: `${TransTXT}\n${dvcrole}`
     }])
     if (rollbackPrompt) txt = TransTXT + ',' + txt;
-    text = txt.split(',');
+    text = txt?.split(','); // 不用?会被阻塞
   }
 
 

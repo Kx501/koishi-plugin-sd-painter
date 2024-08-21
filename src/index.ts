@@ -41,8 +41,8 @@ export function apply(ctx: Context, config: Config) {
   const { timeOut, outputMethod: outMeth, maxTasks } = config;
   const { sampler, scheduler } = config.IMG;
   const monetary = config.monetary.enable;
-  const { enable: censor, endpoint: cEndpoint, labels } = config.censor;
-  const { enable: mask, type: maskType, color, maskShape, maskScale, blurStrength, gradualRatio } = config.censor?.mask ?? {};
+  const { enable: censor, endpoint: cEndpoint, labels, threshold: cThreshold } = config.censor;
+  const { type: maskType, color, maskShape, maskScale, blurStrength, gradualRatio } = config.censor?.mask ?? {};
 
   const header1 = {
     'accept': 'application/json',
@@ -324,6 +324,7 @@ export function apply(ctx: Context, config: Config) {
                   ...(blurStrength !== undefined && { blur_strength: blurStrength }),
                   ...(gradualRatio !== undefined && { gradual_ratio: gradualRatio }),
                   labels: labels,
+                  score: cThreshold
                 },
               }
 
@@ -337,7 +338,7 @@ export function apply(ctx: Context, config: Config) {
 
               log.debug('是否过审:', !boxes);
               if (boxes) {
-                if (!mask && outMeth !== '详细信息') {
+                if (maskType === 'None' && outMeth !== '详细信息') {
                   session.send('图片违规');
                   return; // 阻止图片输出
                 }
@@ -460,12 +461,12 @@ export function apply(ctx: Context, config: Config) {
 
         // Interrogateapi
         async function process() {
-          const { tagger, threshold } = config.WD;
+          const { tagger, threshold: wThreshold } = config.WD;
 
           const payload = {
             image: _,
             model: options?.model || tagger,
-            threshold: options?.threshold || threshold
+            threshold: options?.threshold || wThreshold
           };
           // log.debug('API请求体:', payload);
           try {
