@@ -14,10 +14,12 @@ export * from './config'
 export const usage = `
 ### 插件功能列表
 * 功能 1：文/图生图
-* 功能 2：提示词反推
-* 功能 3：查询/切换模型
-* 功能 4：修改配置(未测试)
-* 功能 5：图片审核(测试版)，见 [imgCensor](https://github.com/Kx501/koishi-plugin-imgcensor)
+* 功能 2：hiresFix 部分功能
+* 功能 3：WD1.4 Tagger 部分功能
+* 功能 4：ADetailer 部分功能
+* 功能 5：查询/切换模型
+* 功能 6：修改配置(未测试)
+* 功能 7：图片审核(测试版)，见 [imgCensor](https://github.com/Kx501/koishi-plugin-imgcensor)
 
 ### 注意事项
 1. 子指令只能直接调用
