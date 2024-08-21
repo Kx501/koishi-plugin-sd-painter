@@ -4,7 +4,7 @@
 
 ## 说明
 
-简单对接 Stable Diffusion WebUI 与 Koishi
+简单对接 Stable Diffusion WebUI 与 Koishi，参考：[novelai-bot](https://github.com/koishijs/novelai-bot)
 
 ### 🌟 插件功能
 
@@ -15,7 +15,7 @@
 * **ADetailer 部分功能**
 * **查询/切换模型(未测试)**
 * **修改配置(未测试)**
-* **图片审核(测试版)，见** [imgCensor](https://github.com/Kx501/koishi-plugin-imgcensor)
+* **图片审核(测试版)，见：**[imgCensor](https://github.com/Kx501/koishi-plugin-imgcensor)
 
 ### ⚠️ 注意事项
 
@@ -27,7 +27,7 @@
 
 ## English Version
 
-Simple integration of Stable Diffusion WebUI with Koishi.
+Simple integration of Stable Diffusion WebUI with Koishi, reference: [novelai-bot](https://github.com/koishijs/novelai-bot).
 
 ### 🌟 Features
 
