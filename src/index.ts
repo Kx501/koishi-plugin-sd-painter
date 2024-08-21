@@ -83,7 +83,7 @@ export function apply(ctx: Context, config: Config) {
     .option('scheduler', '-d <name> 调度器')
     .option('dvc', '-v 扩写提示词')
     .option('hiresFix', '-f 高分辨率修复')
-    .option('fixAlgorithm', '-m <name> 高分辨率修复算法')
+    .option('fixAlgorithm', '-m <name> 修复算法')
     .option('secondPassSteps', '-b <number> 修复步数')
     .option('denoisingStrength', '-o <float> 修复降噪强度')
     .option('hrScale', '-r <float> 修复比例')
