@@ -233,7 +233,7 @@ export function apply(ctx: Context, config: Config) {
               }
             }
           }
-        }
+        };
 
         // API请求体
         const payload1 = {
@@ -261,12 +261,12 @@ export function apply(ctx: Context, config: Config) {
           }),
           save_images: save,
           ...(initImages && { init_images: [initImages] })
-        }
+        };
 
         const payload = {
           ...payload1,
           ...payload2
-        }
+        };
 
         log.debug('API请求体:', payload);
 
@@ -555,7 +555,7 @@ export function apply(ctx: Context, config: Config) {
 
 
   // 注册 GetModels 指令
-  ctx.command('sd').subcommand('sdmodel [sd_name] [vae_name]', '查询和切换模型')
+  ctx.command('sd').subcommand('sdmodel [sd_name] [vae_name]', '查询和切换模型，支持单个参数')
     .usage('输入名称时为切换模型，缺失时为查询模型')
     .option('server', '-x <number> 指定服务器编号')
     .option('sd', '-s 查询/切换SD模型')
@@ -584,14 +584,25 @@ export function apply(ctx: Context, config: Config) {
         session.send('不存在该序列节点，自动选择0号节点')
       }
 
-      const sdName = _1;
-      const vaeName = _2;
+      let sdName: string, vaeName: string;
       const sd = options?.sd;
       const vae = options?.vae;
       const emb = options?.embeddeding;
       const hybNet = options?.hybridnetwork;
       const lora = options?.lora;
       const wd = options?.wd;
+
+      if (_2 === undefined) {
+        if (options?.sd) {
+          sdName = _1;
+        }
+        if (options?.vae) {
+          vaeName = _1;
+        }
+      } else {
+        sdName = _1;
+        vaeName = _2;
+      }
 
       // 聊天记录
       const attrs: Dict<any, string> = {
@@ -628,9 +639,10 @@ export function apply(ctx: Context, config: Config) {
             async function process() {
               try {
                 log.debug('调用切换模型 API');
+
                 const payload = {
-                  ...(sdName && { sd_model_checkpoint: _1 }),
-                  ...(vaeName && { sd_vae_checkpoint: _2 }),
+                  ...(sdName && { sd_model_checkpoint: sdName }),
+                  ...(vaeName && { sd_vae_checkpoint: vaeName }),
                 }
 
                 session.send('模型切换中......')
