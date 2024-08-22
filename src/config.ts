@@ -162,7 +162,7 @@ export const Config: Schema<Config> = Schema.intersect([
     AD: Schema.object({
       ADetailer: Schema.intersect([
         Schema.object({
-          enable: Schema.boolean().default(false).description('ADetailer修复'),
+          enable: Schema.boolean().default(false).description('ADetailer扩展'),
         }),
         Schema.union([
           Schema.object({

@@ -81,18 +81,18 @@ export function apply(ctx: Context, config: Config) {
     .option('seed', '-e <number> 随机种子')
     .option('sampler', '-p <name> 采样器')
     .option('scheduler', '-d <name> 调度器')
+    .option('translate', '-t 翻译')
     .option('dvc', '-v 扩写提示词')
     .option('hiresFix', '-f 高分辨率修复')
     .option('fixAlgorithm', '-m <name> 修复算法')
     .option('secondPassSteps', '-b <number> 修复步数')
     .option('denoisingStrength', '-o <float> 修复降噪强度')
     .option('hrScale', '-r <float> 修复比例')
-    .option('adetailer', '-a ADetailer 插件修复')
+    .option('adetailer', '-a ADetailer扩展')
     .option('server', '-x <number> 指定服务器编号')
     .option('noPositiveTags', '-G 禁用默认正向提示词')
     .option('noNegativeTags', '-J 禁用默认负向提示词')
     // .option('restoreFaces', '-R 禁用人脸修复')
-    .option('noTranslate', '-T 禁用翻译')
     // .option('model', '-m <model_name> 单次切换SD模型')
     // .option('vae', '-v <vae_name> 单次切换Vae模型')
     .usage('若参数有空格，首尾用引号括起来\n图生图@图片，-i 放在指令末尾')
@@ -158,7 +158,7 @@ export function apply(ctx: Context, config: Config) {
         const schName = options?.scheduler || scheduler;
         const noPosTags = options?.noPositiveTags;
         const noNegTags = options?.noNegativeTags;
-        const Trans = useTrans && !options?.noTranslate;
+        const Trans = options?.translate && useTrans;
         const DVC = options?.dvc && config.useDVC.enable;
         // const modelName = options?.model;
         // const vaeName = options?.vae;
@@ -644,6 +644,7 @@ export function apply(ctx: Context, config: Config) {
                   ...(sdName && { sd_model_checkpoint: sdName }),
                   ...(vaeName && { sd_vae_checkpoint: vaeName }),
                 }
+                log.debug(`sdmodel: ${sdName}, vaeName: ${vaeName}`);
 
                 session.send('模型切换中......')
 
