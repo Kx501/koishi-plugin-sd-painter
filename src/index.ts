@@ -113,6 +113,9 @@ export function apply(ctx: Context, config: Config) {
 
         // 选择服务器
         let endpoint = selectServer(session, options?.server);
+        if (endpoint === '离线')
+          if (options?.server) return '所选服务器离线';
+          else return '所有服务器离线';
 
         //// 参数处理 ////
         // 检查图生图参数
@@ -399,6 +402,9 @@ export function apply(ctx: Context, config: Config) {
         }
 
         let endpoint = selectServer(session, options?.server);
+        if (endpoint === '离线')
+          if (options?.server) return '所选服务器离线';
+          else return '所有服务器离线';
 
         // 获取图片
         log.debug('获取图片');
@@ -783,7 +789,7 @@ export function apply(ctx: Context, config: Config) {
    * 
    * @param session 当前会话
    * @param servIndex 可选参数，手动指定服务器编号，可以重新激活离线服务器。
-   * @returns 空闲服务器的地址
+   * @returns 空闲服务器的地址/‘离线’
    * 
    * 说明：
    * - 服务器状态包括：
@@ -792,7 +798,7 @@ export function apply(ctx: Context, config: Config) {
    *   - 离线：服务器不可用，不应接收新任务。
    * 
    * - 如果没有提供 `servIndex` 参数，则进入轮询逻辑。
-   * - 如果所有服务器都是离线状态，抛出错误。
+   * - 如果所有服务器都是离线状态，返回。
    * - 如果所有服务器都是忙碌状态，正常轮询。
    */
   function selectServer(session: Session, servIndex?: number): string {
@@ -804,9 +810,8 @@ export function apply(ctx: Context, config: Config) {
       if (servIndex < servers.length) {
         index = servIndex;
         const server = servers[index];
-        if (serverStatus.get(server) === 'offline') {
-          throw new Error('所选服务器离线');
-        } else {
+        if (serverStatus.get(server) === 'offline') return '离线';
+        else {
           log.debug(`选择 ${index}号 服务器: ${server}`);
           return server;
         }
@@ -827,9 +832,7 @@ export function apply(ctx: Context, config: Config) {
       }
 
       // 所有服务器离线时抛出
-      if (offlineCount === servers.length) {
-        throw new Error('所有服务器离线');
-      }
+      if (offlineCount === servers.length) return '离线';
 
       index = (index + 1) % servers.length; // 移动到下一个索引
       if (index === 0) break; // 完成一轮轮询
@@ -849,7 +852,6 @@ export function apply(ctx: Context, config: Config) {
     const errorMessage = `出错了: ${error.message}`;
     const urlPattern = /(?:https?:\/\/)[^ ]+/g;
     const match = errorMessage.match(urlPattern);
-    log.debug(`匹配: ${JSON.stringify(match)}`);
 
     if (match[0]) {
       const fullUrl = match[0];
@@ -857,13 +859,12 @@ export function apply(ctx: Context, config: Config) {
       // 确定地址
       const matchingServer = servers.find(s => s === serverAddress);
       if (matchingServer) {
-        serverStatus.set(serverAddress, 'offline'); // 标记服务器为离线
-        return `${servers.indexOf(serverAddress)}号 服务器已离线`;
+        serverStatus.set(matchingServer, 'offline'); // 标记服务器为离线
+        return `${servers.indexOf(matchingServer)}号 服务器已离线`;
       } else {
         // 脱敏处理
         const { protocol, hostname, port } = new URL(fullUrl);
         let maskedHost: string;
-        log.debug(hostname);
         if (/^(\d+(\.\d+){3})$/.test(hostname)) {
           // 处理 IP 地址
           const ipParts = hostname.split('.');
@@ -911,17 +912,17 @@ export function apply(ctx: Context, config: Config) {
   }
 
 
-  // 开始处理任务
+  // 处理任务
   function start(server: string): void {
     taskNum++;
-    serverStatus.set(server, 'busy');
+    serverStatus.set(server, 'busy'); // 先轮询后处理
   }
 
 
   // 结束任务
   function end(server: string): void {
     taskNum--;
-    serverStatus.set(server, 'free');
+    if (serverStatus.get(server) === 'busy') serverStatus.set(server, 'free');
   }
 
 }
