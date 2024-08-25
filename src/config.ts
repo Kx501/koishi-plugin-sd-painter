@@ -58,6 +58,12 @@ export interface Config {
   maxPrompt: number;  //最大提示词数
   excessHandle: string;  //提示词超限处理方式{
   setConfig: boolean; // 指令修改SD全局设置
+  maxTasks: number; // 最大任务数
+  monetary: {
+    enable?: boolean; // 启用经济系统
+    sd?: number;  // 绘画收费
+    wd?: number;  // 反推收费
+  };
   useTranslation: {
     enable?: boolean; // 是否使用翻译服务
     pronounCorrect?: boolean; //修正翻译后代词
@@ -66,12 +72,6 @@ export interface Config {
     enable?: boolean;
     text?: string;
     rollbackPrompt?: boolean;
-  };
-  maxTasks: number; // 最大任务数
-  monetary: {
-    enable?: boolean; // 启用经济系统
-    sd?: number;  // 绘画收费
-    wd?: number;  // 反推收费
   };
   censor: {
     enable?: boolean;
@@ -213,6 +213,20 @@ export const Config: Schema<Config> = Schema.intersect([
     setConfig: Schema.boolean().default(false).description('启用指令修改SD全局设置'),
   }).description('其他设置'),
   Schema.object({
+    maxTasks: Schema.number().min(0).default(3).description('最大任务数限制，设置为0关闭'),
+    monetary: Schema.intersect([
+      Schema.object({
+        enable: Schema.boolean().default(false).description('启用经济系统'),
+      }),
+      Schema.union([
+        Schema.object({
+          enable: Schema.const(true).required(),
+          sd: Schema.number().min(0).max(200).step(1).role('slider').default(20).description('绘画费用，设置为0关闭'),
+          wd: Schema.number().min(0).max(200).step(1).role('slider').default(10).description('反推费用，设置为0关闭'),
+        }),
+        Schema.object({})
+      ]),
+    ]),
     useTranslation: Schema.intersect([
       Schema.object({
         enable: Schema.boolean().default(false).description('翻译非英文提示词'),
@@ -237,20 +251,6 @@ export const Config: Schema<Config> = Schema.intersect([
         }),
         Schema.object({}),
       ])
-    ]),
-    maxTasks: Schema.number().min(0).default(3).description('最大任务数限制，设置为0关闭'),
-    monetary: Schema.intersect([
-      Schema.object({
-        enable: Schema.boolean().default(false).description('启用经济系统'),
-      }),
-      Schema.union([
-        Schema.object({
-          enable: Schema.const(true).required(),
-          sd: Schema.number().min(0).max(200).step(1).role('slider').default(20).description('绘画费用，设置为0关闭'),
-          wd: Schema.number().min(0).max(200).step(1).role('slider').default(10).description('反推费用，设置为0关闭'),
-        }),
-        Schema.object({})
-      ]),
     ]),
     censor: Schema.intersect([
       Schema.object({
