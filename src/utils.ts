@@ -17,6 +17,7 @@ export async function promptHandle(ctx: Context, session: Session, config: Confi
 
   //// GPT增强 ////
   if (dvc) {
+    if (!ctx.dvc) throw new Error('请先安装dvc服务');
     const TransTXT = text.join(','); // 中间量
     let txt = await ctx.dvc.chat_with_gpt([{
       role: 'system',

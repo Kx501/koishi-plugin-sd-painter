@@ -58,14 +58,12 @@ export function apply(ctx: Context, config: Config) {
 
   let taskNum = 0;
   const servers = config.endpoint;
-  const servStr = servers.map((_, index) => `服务器 ${index}`).join('、');
-
-  // 简单轮询
-  function selectServer() {
-    const index = taskNum % servers.length;
-    log.debug(`选择服务器: ${index}号: ${servers[index]}`);
-    return servers[index];
+  const serverStatus = new Map<string, string>();
+  for (const server of servers) {
+    serverStatus.set(server, 'free'); // 默认所有服务器空闲
   }
+
+  const servStr = servers.map((_, index) => `服务器 ${index}`).join('、'); // 作消息输出
 
 
 
@@ -103,16 +101,8 @@ export function apply(ctx: Context, config: Config) {
 
         //// 经济系统 ////
         const sdMonetary = config.monetary.sd;
-        let userAid: number;
-        if (monetary && sdMonetary) {
-          userAid = (await ctx.database.get('binding', { pid: [session.userId] }, ['aid']))[0]?.aid;
-          let balance = (await ctx.database.get('monetary', { uid: userAid }, ['value']))[0]?.value;
-          if (balance < sdMonetary || balance === undefined || !ctx.monetary) {
-            ctx.monetary.gain(userAid, 0);
-            return '当前余额不足，请联系管理员充值VIP /doge/doge'
-          }
-        }
-
+        const userAid = await checkBalance(session, sdMonetary);
+        if (typeof userAid === 'string') return userAid;
 
         //// 读取配置 ////
         const { save, imgSize, cfgScale, txt2imgSteps: t2iSteps, img2imgSteps: i2iSteps, maxSteps, prePrompt, preNegPrompt, restoreFaces: resFaces } = config.IMG;
@@ -122,15 +112,7 @@ export function apply(ctx: Context, config: Config) {
         const useTrans = config.useTranslation.enable;
 
         // 选择服务器
-        let endpoint = selectServer();
-        if (options?.server)
-          if (options.server < servers.length)
-            endpoint = servers[options.server];
-          else {
-            endpoint = servers[0];
-            session.send('不存在该序列节点，自动选择0号节点')
-          }
-
+        let endpoint = selectServer(session, options?.server);
 
         //// 参数处理 ////
         // 检查图生图参数
@@ -282,9 +264,10 @@ export function apply(ctx: Context, config: Config) {
           session.send(`在画了在画了，不过前面还有 ${taskNum} 个任务......`)
         }
 
-        //// 调用绘画API ////
+        //// 开始请求 ////
         async function process() {
           try {
+            //// 调用绘画API ////
             let response: HTTP.Response<any>;
             if (initImages) {
               // img2imgAPI
@@ -373,27 +356,13 @@ export function apply(ctx: Context, config: Config) {
             if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
             if (error?.response?.data?.detail) return `请求出错: ${error.response.data.detail}`;
             if (outMeth === '详细信息') return error;
-            return `生成图片出错: ${error.message}`.replace(/(https?:\/\/)?([0-9.]+|[^/:]+):(\d+)/g, (_, protocol, host, port) => {
-              let maskedHost: string;
-              if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
-                // 处理IP
-                const ipParts = host.split('.');
-                maskedHost = [ipParts[0], '***', '***', ipParts[3]].join('.');
-              } else {
-                // 处理域名
-                const domainParts = host.split('.');
-                maskedHost = ['***', domainParts[domainParts.length - 1]].join('.');
-              }
-              // 处理端口
-              const maskedPort = port.slice(0, -3) + '***';
-              return `${protocol ? protocol : ''}://${maskedHost}:${maskedPort}`;
-            });
+            return handleServerError(error);
           }
         }
 
-        taskNum++;
+        start(endpoint);
         session.send(await process());
-        taskNum--;
+        end(endpoint);
         if (monetary && sdMonetary) ctx.monetary.cost(userAid, sdMonetary);
       } else {
         // 超过最大任务数的处理逻辑
@@ -429,14 +398,7 @@ export function apply(ctx: Context, config: Config) {
           }
         }
 
-        let endpoint = selectServer();
-        if (options?.server)
-          if (options.server < servers.length)
-            endpoint = servers[options.server];
-          else {
-            endpoint = servers[0];
-            session.send('不存在该序列节点，自动选择0号节点')
-          }
+        let endpoint = selectServer(session, options?.server);
 
         // 获取图片
         log.debug('获取图片');
@@ -503,15 +465,13 @@ export function apply(ctx: Context, config: Config) {
           } catch (error) {
             log.error('反推出错:', error);
             if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
-            return `反推出错: ${error.message}`.replace(/https?:\/\/[^/]+/g, (url) => {
-              return url.replace(/\/\/[^/]+/, '//***');
-            });
+            return handleServerError(error);
           }
         }
 
-        taskNum++;
+        start(endpoint);
         session.send(await process());
-        taskNum--;
+        end(endpoint);
         if (monetary && wdMonetary) ctx.monetary.cost(userAid, wdMonetary);
       } else {
         session.send(Random.pick([
@@ -555,16 +515,15 @@ export function apply(ctx: Context, config: Config) {
 
 
   // 注册 GetModels 指令
-  ctx.command('sd').subcommand('sdmodel [sd_name] [vae_name]', '查询和切换模型，支持单个参数')
+  ctx.command('sd').subcommand('sdmodel <server_number> [sd_name] [vae_name]', '查询和切换模型，支持单个参数')
     .usage('输入名称时为切换模型，缺失时为查询模型')
-    .option('server', '-x <number> 指定服务器编号')
     .option('sd', '-s 查询/切换SD模型')
     .option('vae', '-v 查询/切换Vae模型')
     .option('embeddeding', '-e 查询可用的嵌入模型')
     .option('hybridnetwork', '-n 查询可用的超网络模型')
     .option('lora', '-l 查询可用的loras模型')
     .option('wd', '-w 查询可用的WD模型')
-    .action(async ({ options, session }, _1?, _2?) => {
+    .action(async ({ options, session }, _, _1?, _2?) => {
       log.debug('选择子选项', options)
 
       if (!Object.keys(options).length) {
@@ -577,12 +536,7 @@ export function apply(ctx: Context, config: Config) {
       }
 
       // 选择服务器
-      let endpoint = selectServer();
-      if (options.server < servers.length) endpoint = servers[options.server];
-      else {
-        endpoint = servers[0];
-        session.send('不存在该序列节点，自动选择0号节点')
-      }
+      const endpoint = servers[_];
 
       let sdName: string, vaeName: string;
       const sd = options?.sd;
@@ -658,13 +612,13 @@ export function apply(ctx: Context, config: Config) {
                 if (response.status === 200) return '模型更换成功'; else return `模型更换失败: ${response.statusText}`;
               } catch (error) {
                 log.error('切换模型时出错:', error);
-                return `切换模型时出错: ${error.message}`;
+                return handleServerError(error);
               }
             }
 
-            taskNum++;
+            start(endpoint);
             session.send(await process());
-            taskNum--;
+            end(endpoint);
           }
         } else {
           session.send(Random.pick([
@@ -740,9 +694,7 @@ export function apply(ctx: Context, config: Config) {
 
       } catch (error) {
         log.error('查询模型时出错:', error);
-        return `查询模型时出错: ${error.message}`.replace(/https?:\/\/[^/]+/g, (url) => {
-          return url.replace(/\/\/[^/]+/, '//***');
-        });
+        return handleServerError(error);
       }
     });
 
@@ -750,12 +702,11 @@ export function apply(ctx: Context, config: Config) {
 
 
   // 注册 Set Config 指令
-  ctx.command('sd').subcommand('sdset <configData>', '修改SD全局设置', {
+  ctx.command('sd').subcommand('sdset <server_number> <settings>', '修改SD全局设置', {
     checkUnknown: true,
     checkArgCount: true
   })
-    .option('server', '-x <number> 指定服务器编号')
-    .action(async ({ options, session }, configData) => {
+    .action(async ({ options, session }, server_number, settings) => {
       if (config.setConfig) {
         if (taskNum === 0) {
 
@@ -764,19 +715,14 @@ export function apply(ctx: Context, config: Config) {
           }
 
           // 选择服务器
-          let endpoint = selectServer();
-          if (options.server < servers.length) endpoint = servers[options.server];
-          else {
-            endpoint = servers[0];
-            session.send('不存在该序列节点，自动选择0号节点')
-          }
+          const endpoint = servers[server_number];
 
           async function process() {
             try {
               log.debug('调用修改设置 API');
               const response = await ctx.http('post', `${endpoint}/sdapi/v1/options`, {
                 timeout: timeOut,
-                data: JSON.parse(configData),
+                data: JSON.parse(settings),
                 headers: { 'Content-Type': 'application/json' },
               });
               log.debug('API响应状态:', response.statusText);
@@ -787,15 +733,13 @@ export function apply(ctx: Context, config: Config) {
               if (error.response?.status === 422) {
                 return '配置数据验证错误，请检查提供的数据格式。';
               }
-              return `设置配置时出错: ${error.message}`.replace(/https?:\/\/[^/]+/g, (url) => {
-                return url.replace(/\/\/[^/]+/, '//***');
-              });;
+              return handleServerError(error);
             }
           }
 
-          taskNum++;
+          start(endpoint);
           session.send(await process());
-          taskNum--;
+          end(endpoint);
         } else {
           session.send('当前有任务在进行，请等待所有任务完成');
         }
@@ -808,20 +752,11 @@ export function apply(ctx: Context, config: Config) {
 
 
   // 列出可用的基础设置
-  ctx.command('sd').subcommand('sdlist [s1s2s3s4s5]', '查询服务器、采样器、调度器、AD模型、WD模型列表')
-    .option('server', '-x <number> 指定服务器编号')
-    .action(({ options, session }, s1s2s3s4s5) => {
+  ctx.command('sd').subcommand('sdlist [s1s2s3s4s5]', '查询服务器、采样器、调度器、AD模型、WD模型列表，暂不支持自定义模型')
+    .action(({ options }, s1s2s3s4s5) => {
 
       if (!Object.keys(options).includes('server')) {
         return `请指定服务器编号，当前可用:\n${servStr}`;
-      }
-
-      // 选择服务器
-      let endpoint = selectServer();
-      if (options.server < servers.length) endpoint = servers[options.server];
-      else {
-        endpoint = servers[0];
-        session.send('不存在该序列节点，自动选择0号节点')
       }
 
       switch (s1s2s3s4s5) {
@@ -839,5 +774,154 @@ export function apply(ctx: Context, config: Config) {
           return '请选择s1/s2/s3/s4/s5';
       }
     })
+
+
+
+
+  /**
+   * 选择一个空闲的服务器进行轮询。
+   * 
+   * @param session 当前会话
+   * @param servIndex 可选参数，手动指定服务器编号，可以重新激活离线服务器。
+   * @returns 空闲服务器的地址
+   * 
+   * 说明：
+   * - 服务器状态包括：
+   *   - 空闲：服务器可以接受新任务。
+   *   - 忙碌：服务器正在处理任务。
+   *   - 离线：服务器不可用，不应接收新任务。
+   * 
+   * - 如果没有提供 `servIndex` 参数，则进入轮询逻辑。
+   * - 如果所有服务器都是离线状态，抛出错误。
+   * - 如果所有服务器都是忙碌状态，正常轮询。
+   */
+  function selectServer(session: Session, servIndex?: number): string {
+    // 轮询索引
+    let index = taskNum % servers.length;
+
+    // 检查是否提供了server选项
+    if (servIndex) {
+      if (servIndex < servers.length) {
+        index = servIndex;
+        const server = servers[index];
+        if (serverStatus.get(server) === 'offline') {
+          throw new Error('所选服务器离线');
+        } else {
+          log.debug(`选择 ${index}号 服务器: ${server}`);
+          return server;
+        }
+      } else {
+        session.send('不存在该序列节点，自动选择一个空闲服务器');
+      }
+    }
+
+    // 轮询检查逻辑
+    let offlineCount = 0;
+    while (true) {
+      const server = servers[index];
+      if (serverStatus.get(server) === 'offline') {
+        offlineCount++;
+      } else if (serverStatus.get(server) === 'free') {
+        log.debug(`选择 ${index}号 服务器: ${server}`);
+        return server;
+      }
+
+      // 所有服务器离线时抛出
+      if (offlineCount === servers.length) {
+        throw new Error('所有服务器离线');
+      }
+
+      index = (index + 1) % servers.length; // 移动到下一个索引
+      if (index === 0) break; // 完成一轮轮询
+    }
+
+    log.debug('所有服务器忙碌，正常轮询');
+    return servers[index]; // 返回轮询索引，即使忙碌
+  }
+
+
+  /**
+   * 根据错误信息中的 URL 更新服务器状态。
+   * @param error 错误对象
+   * @returns 处理后的错误消息
+   */
+  function handleServerError(error: Error): string {
+    const errorMessage = `出错了: ${error.message}`;
+    const urlPattern = /(?:https?:\/\/)[^ ]+/g;
+    const match = errorMessage.match(urlPattern);
+    log.debug(`匹配: ${JSON.stringify(match)}`);
+
+    if (match[0]) {
+      const fullUrl = match[0];
+      const serverAddress = fullUrl.split('/').slice(0, 3).join('/');
+      // 确定地址
+      const matchingServer = servers.find(s => s === serverAddress);
+      if (matchingServer) {
+        serverStatus.set(serverAddress, 'offline'); // 标记服务器为离线
+        return `${servers.indexOf(serverAddress)}号 服务器已离线`;
+      } else {
+        // 脱敏处理
+        const { protocol, hostname, port } = new URL(fullUrl);
+        let maskedHost: string;
+        log.debug(hostname);
+        if (/^(\d+(\.\d+){3})$/.test(hostname)) {
+          // 处理 IP 地址
+          const ipParts = hostname.split('.');
+          maskedHost = [ipParts[0], '***', '***', ipParts[3]].join('.');
+        } else {
+          // 处理域名
+          const domainParts = hostname.split('.');
+          maskedHost = [domainParts[0], '***', domainParts[domainParts.length - 1]].join('.');
+        }
+        // 处理端口
+        const maskedPort = port.slice(0, -3) + '***';
+
+        const maskedUrl = `${protocol}//${maskedHost}:${maskedPort}`;
+        // 替换错误消息中的 URL
+        const maskedMessage = errorMessage.replace(urlPattern, maskedUrl);
+        return maskedMessage;
+      }
+    }
+    return errorMessage;
+  }
+
+
+  /**
+   * 异步函数：验证用户金额
+   * @param session 用户会话对象，包含用户信息
+   * @param cost 扣除的金额，大于0时启用
+   */
+  async function checkBalance(session: Session, cost: number): Promise<number | string> {
+    let userAid: number;
+    // 检查monetary服务和成本是否存在
+    if (monetary && cost) {
+      // 如果上下文中存在monetary服务
+      if (ctx.monetary) {
+        // 查询用户的账户ID
+        userAid = (await ctx.database.get('binding', { pid: [session.userId] }, ['aid']))[0]?.aid;
+        // 查询用户的余额
+        let balance = (await ctx.database.get('monetary', { uid: userAid }, ['value']))[0]?.value;
+        // 检查余额是否足够，如果不足或未定义，则不扣除并返回提示信息
+        if (balance < cost || balance === undefined) {
+          ctx.monetary.gain(userAid, 0);
+          return '当前余额不足，请联系管理员充值VIP /doge/doge'
+        } else return userAid;
+      } else throw new Error('请先安装monetary服务');
+    }
+  }
+
+
+  // 开始处理任务
+  function start(server: string): void {
+    taskNum++;
+    serverStatus.set(server, 'busy');
+  }
+
+
+  // 结束任务
+  function end(server: string): void {
+    taskNum--;
+    serverStatus.set(server, 'free');
+  }
 
 }
