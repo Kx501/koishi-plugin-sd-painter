@@ -264,7 +264,7 @@ export function apply(ctx: Context, config: Config) {
             '笔墨已备好，画卷即将展开'
           ]))
         } else {
-          session.send(`在画了在画了，不过前面还有 ${taskNum} 个任务......`)
+          session.send(`在画了在画了，当前 ${taskNum + 1} 个任务......`)
         }
 
         //// 开始请求 ////
@@ -428,7 +428,7 @@ export function apply(ctx: Context, config: Config) {
             '我在想想想了......',
           ]))
         } else {
-          session.send(`在推了在推了，不过前面还有 ${taskNum} 个任务......`)
+          session.send(`在推了在推了，当前 ${taskNum + 1} 个任务......`)
         }
 
         // Interrogateapi
