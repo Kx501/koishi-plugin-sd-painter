@@ -508,7 +508,7 @@ export function apply(ctx: Context, config: Config) {
         // log.debug('API响应结果:', response);
 
         taskNum--;
-        return `${response}`;
+        return `${JSON.stringify(response)}`;
       } catch (error) {
         log.error('错误:', error.detail);
         return `错误: ${error.message}`.replace(/https?:\/\/[^/]+/g, (url) => {
