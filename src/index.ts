@@ -903,10 +903,9 @@ export function apply(ctx: Context, config: Config) {
         // 查询用户的余额
         let balance = (await ctx.database.get('monetary', { uid: userAid }, ['value']))[0]?.value;
         // 检查余额是否足够，如果不足或未定义，则不扣除并返回提示信息
-        if (balance < cost || balance === undefined) {
-          ctx.monetary.gain(userAid, 0);
-          return '当前余额不足，请联系管理员充值VIP /doge/doge'
-        } else return userAid;
+        if (balance === undefined) ctx.monetary.gain(userAid, 0);
+        if (balance < cost) return '当前余额不足，请联系管理员充值VIP /doge/doge'
+        else return userAid;
       } else throw new Error('请先安装monetary服务');
     }
   }
