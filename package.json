@@ -33,8 +33,10 @@
 				"http"
 			],
 			"optional": [
+				"translator",
 				"monetary",
-				"dvc"
+				"dvc",
+				"database"
 			]
 		},
 		"preview": true,
