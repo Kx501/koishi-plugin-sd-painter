@@ -12,7 +12,7 @@ export const inject = {
 export * from './config'
 
 export const usage = `
-### 插件功能列表
+### 插件功能
 * 功能 1：文/图生图
 * 功能 2：中止生成
 * 功能 3：HiresFix 部分功能
@@ -102,7 +102,7 @@ export function apply(ctx: Context, config: Config) {
         //// 经济系统 ////
         const sdMonetary = config.monetary.sd;
         const userAid = await checkBalance(session, sdMonetary);
-        if (typeof userAid === 'string') return userAid;
+        if (typeof userAid === 'string') return userAid; // 余额不足
 
         //// 读取配置 ////
         const { save, imgSize, cfgScale, txt2imgSteps: t2iSteps, img2imgSteps: i2iSteps, maxSteps, prePrompt, preNegPrompt, restoreFaces: resFaces } = config.IMG;
@@ -894,9 +894,7 @@ export function apply(ctx: Context, config: Config) {
    */
   async function checkBalance(session: Session, cost: number): Promise<number | string> {
     let userAid: number;
-    // 检查monetary服务和成本是否存在
     if (monetary && cost) {
-      // 如果上下文中存在monetary服务
       if (ctx.monetary) {
         // 查询用户的账户ID
         userAid = (await ctx.database.get('binding', { pid: [session.userId] }, ['aid']))[0]?.aid;
