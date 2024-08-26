@@ -494,7 +494,7 @@ export function apply(ctx: Context, config: Config) {
   // 注册 Interruptapi 指令
   ctx.command('sd').subcommand('sdstop <server_number:number>', '中断当前操作')
     .action(async ({ }, server_number) => {
-      if (!server_number) return '请指定服务器编号';
+      if (server_number === undefined)`请指定服务器编号，当前可用:\n${servStr}`;
       try {
         log.debug('调用中断 API');
 
@@ -537,9 +537,7 @@ export function apply(ctx: Context, config: Config) {
         return '请选择指令的选项！';
       }
 
-      if (!Object.keys(options).includes('server')) {
-        return `请指定服务器编号，当前可用:\n${servStr}`;
-      }
+      if (_ === undefined) return `请指定服务器编号，当前可用:\n${servStr}`;
 
       // 选择服务器
       const endpoint = servers[_];
@@ -716,9 +714,7 @@ export function apply(ctx: Context, config: Config) {
       if (config.setConfig) {
         if (taskNum === 0) {
 
-          if (!Object.keys(options).includes('server')) {
-            return `请指定服务器编号，当前可用:\n${servStr}`;
-          }
+          if (server_number === undefined)`请指定服务器编号，当前可用:\n${servStr}`;
 
           // 选择服务器
           const endpoint = servers[server_number];
@@ -805,8 +801,8 @@ export function apply(ctx: Context, config: Config) {
     // 轮询索引
     let index = taskNum % servers.length;
 
-    // 检查是否提供了server选项
-    if (servIndex) {
+    // 检查是否提供了server选项，注意0
+    if (servIndex !== undefined) {
       if (servIndex < servers.length) {
         index = servIndex;
         const server = servers[index];
