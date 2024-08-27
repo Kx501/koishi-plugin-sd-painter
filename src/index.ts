@@ -263,9 +263,7 @@ export function apply(ctx: Context, config: Config) {
             '正在创作中，请稍等片刻',
             '笔墨已备好，画卷即将展开'
           ]))
-        } else {
-          session.send(`在画了在画了，当前 ${taskNum + 1} 个任务......`)
-        }
+        } else session.send(`在画了在画了，当前 ${taskNum + 1} 个任务......`)
 
         //// 开始请求 ////
         async function process() {
@@ -427,9 +425,7 @@ export function apply(ctx: Context, config: Config) {
             '让我仔细想想......',
             '我在想想想了......',
           ]))
-        } else {
-          session.send(`在推了在推了，当前 ${taskNum + 1} 个任务......`)
-        }
+        } else session.send(`在推了在推了，当前 ${taskNum + 1} 个任务......`)
 
         // Interrogateapi
         async function process() {
@@ -507,7 +503,7 @@ export function apply(ctx: Context, config: Config) {
 
         // log.debug('API响应结果:', response);
 
-        taskNum--;
+        if (taskNum > 0) taskNum--;
         return response.statusText;
       } catch (error) {
         log.error('错误:', error.detail);
