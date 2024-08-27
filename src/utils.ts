@@ -21,7 +21,10 @@ export async function promptHandle(ctx: Context, session: Session, config: Confi
     const TransTXT = text.join(','); // 中间量
     let txt = await ctx.dvc.chat_with_gpt([{
       role: 'system',
-      content: `${TransTXT}\n${dvcrole}`
+      content: `${dvcrole}`
+    }, {
+      role: 'user',
+      content: `${TransTXT}`
     }])
     if (rollbackPrompt) txt = TransTXT + ',' + txt;
     text = txt?.split(','); // 不用?会被阻塞
