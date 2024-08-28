@@ -1,6 +1,6 @@
-# @kx501/koishi-plugin-sd-webui-api
+# @kx501/koishi-plugin-sd-painter
 
-[![npm](https://img.shields.io/npm/v/@kx501/koishi-plugin-sd-webui-api?style=flat-square)](https://www.npmjs.com/package/@kx501/koishi-plugin-sd-webui-api)
+[![npm](https://img.shields.io/npm/v/@kx501/koishi-plugin-sd-painter?style=flat-square)](https://www.npmjs.com/package/@kx501/koishi-plugin-sd-painter)
 
 ## 说明
 
@@ -32,6 +32,7 @@ Simple integration of Stable Diffusion WebUI with Koishi, reference: [novelai-bo
 ### 🌟 Features
 
 * **Text/Image-to-Image Generation**
+* **interrupt generation**
 * **HiresFix Partial Features**
 * **WD1.4 Tagger Partial Features**
 * **ADetailer Partial Features**

@@ -1,7 +1,7 @@
 import { Schema, Logger } from 'koishi';
 import { samplerL, schedulerL, hr_modelL, ad_modelL, wd_modelL, labelL, mask_typeL } from './list';
 
-export const log = new Logger('sd-webui-api');
+export const log = new Logger('sd-painter');
 
 export interface Config {
   endpoint: string[]; // API端点

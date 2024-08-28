@@ -4,7 +4,7 @@ import { promptHandle } from './utils'
 import { Config, log } from './config';
 import { samplerL, schedulerL, ad_modelL, wd_modelL } from './list';
 
-export const name = 'sd-webui-api';
+export const name = 'sd-painter';
 export const inject = {
   required: ['http'],
   optional: ['translator', 'dvc', 'database', 'monetary']
@@ -12,6 +12,22 @@ export const inject = {
 export * from './config'
 
 export const usage = `
+---
+**免责声明**
+
+感谢您使用我们的插件！请您仔细阅读以下条款，以确保您了解并接受我们的政策：
+
+1. **图片使用**：本插件用于发送由 Stable Diffusion WebUI API 生成的图片。所有图片仅供娱乐和个人使用，不得用于商业目的或侵犯他人的版权。
+2. **隐私保护**：本插件不会收集或保存用户的个人信息。请确保上传到插件的图片不包含敏感或个人隐私信息。
+3. **法律责任**：使用者必须遵守当地法律法规，尤其是关于版权的规定。若因违反相关规定而产生的任何法律后果，均由使用者自行承担。
+4. **禁止不当内容**：严禁使用本插件发送色情、暴力、仇恨言论等非法或不当内容。
+5. **技术支持**：我们不对插件的技术问题承担责任，但会尽力提供支持和维护。
+6. **免责声明更新**：我们保留随时修改本声明的权利，请及时更新插件以获取最新版本的免责声明。**若因未及时更新插件而导致的责任和损失，本方概不负责**。
+7. **解释权归属**：本声明的最终解释权归插件开发者所有。
+
+通过使用本插件，即视为**同意上述条款**。请确保您已经仔细阅读并理解以上内容。
+
+---
 ### 插件功能
 * 功能 1：文/图生图
 * 功能 2：中止生成
