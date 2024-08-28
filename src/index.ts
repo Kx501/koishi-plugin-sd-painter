@@ -861,7 +861,7 @@ export function apply(ctx: Context, config: Config) {
     const urlPattern = /(?:https?:\/\/)[^ ]+/g;
     const match = errorMessage.match(urlPattern);
 
-    if (match[0]) {
+    if (match && match[0]) {
       const fullUrl = match[0];
       const serverAddress = fullUrl.split('/').slice(0, 3).join('/');
       // 确定地址
