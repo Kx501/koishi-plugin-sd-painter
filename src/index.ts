@@ -818,11 +818,11 @@ export function apply(ctx: Context, config: Config) {
       if (servIndex < servers.length) {
         index = servIndex;
         const server = servers[index];
-        if (serverStatus.get(server) === 'offline') return '离线';
-        else {
-          log.debug(`选择 ${index}号 服务器: ${server}`);
-          return server;
-        }
+        // if (serverStatus.get(server) === 'offline') return '离线';
+        // else {
+        log.debug(`选择 ${index}号 服务器: ${server}`);
+        return server;
+        // }
       } else {
         session.send('不存在该序列节点，自动选择一个空闲服务器');
       }
