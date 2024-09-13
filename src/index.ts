@@ -519,7 +519,6 @@ export function apply(ctx: Context, config: Config) {
 
         // log.debug('API响应结果:', response);
 
-        if (taskNum > 0) taskNum--;
         return response.statusText;
       } catch (error) {
         log.error('错误:', error.detail);
