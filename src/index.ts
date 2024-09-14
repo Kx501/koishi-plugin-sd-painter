@@ -611,7 +611,7 @@ export function apply(ctx: Context, config: Config) {
 
                 const payload = {
                   ...(sdName && { sd_model_checkpoint: sdName }),
-                  ...(vaeName && { sd_vae_checkpoint: vaeName }),
+                  ...(vaeName && { sd_vae: vaeName }),
                 }
                 log.debug(`sdmodel: ${sdName}, vaeName: ${vaeName}`);
 
