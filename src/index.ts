@@ -504,7 +504,10 @@ export function apply(ctx: Context, config: Config) {
 
 
   // 注册 Interruptapi 指令
-  ctx.command('sd').subcommand('sdstop <server_number:number>', '中断当前操作')
+  ctx.command('sd').subcommand('sdstop <server_number:number>', '中断当前操作', {
+    checkUnknown: true,
+    checkArgCount: true
+  })
     .action(async ({ }, server_number) => {
       if (server_number === undefined)`请指定服务器编号，当前可用:\n${servStr}`;
       try {
@@ -532,7 +535,10 @@ export function apply(ctx: Context, config: Config) {
 
 
   // 注册 GetModels 指令
-  ctx.command('sd').subcommand('sdmodel <server_number> [sd_name] [vae_name]', '查询和切换模型，支持单个参数')
+  ctx.command('sd').subcommand('sdmodel <server_number> [sd_name] [vae_name]', '查询和切换模型，支持单个参数', {
+    checkUnknown: true,
+    checkArgCount: true
+  })
     .usage('输入名称时为切换模型，缺失时为查询模型')
     .option('sd', '-s 查询/切换SD模型')
     .option('vae', '-v 查询/切换Vae模型')
