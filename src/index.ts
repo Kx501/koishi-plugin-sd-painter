@@ -818,7 +818,7 @@ export function apply(ctx: Context, config: Config) {
     // 轮询索引
     let index = taskNum % servers.length;
 
-    // 检查是否提供了server选项，注意0
+    // 检查是否提供了server选项，因为0所以用undifined
     if (servIndex !== undefined) {
       if (servIndex < servers.length) {
         index = servIndex;
@@ -837,22 +837,22 @@ export function apply(ctx: Context, config: Config) {
     let offlineCount = 0;
     while (true) {
       const server = servers[index];
-      if (serverStatus.get(server) === 'offline') {
-        offlineCount++;
-      } else if (serverStatus.get(server) === 'free') {
+      if (serverStatus.get(server) === 'offline') offlineCount++;
+      else if (serverStatus.get(server) === 'free') {
         log.debug(`选择 ${index}号 服务器: ${server}`);
         return server;
       }
 
-      // 所有服务器离线时抛出
+      // 所有服务器离线时返回标记，并在外层提示
       if (offlineCount === servers.length) return '离线';
 
       index = (index + 1) % servers.length; // 移动到下一个索引
-      if (index === 0) break; // 完成一轮轮询
+      if (index === 0 && serverStatus.get(server) === 'free') {
+        log.debug('所有服务器忙碌，正常轮询');
+        return servers[index]; // 完成一轮轮询，返回轮询索引，即使忙碌
+      }
+      else return servers[index - 1]
     }
-
-    log.debug('所有服务器忙碌，正常轮询');
-    return servers[index]; // 返回轮询索引，即使忙碌
   }
 
 
