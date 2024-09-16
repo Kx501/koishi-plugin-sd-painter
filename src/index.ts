@@ -847,7 +847,7 @@ export function apply(ctx: Context, config: Config) {
       if (offlineCount === servers.length) return '离线';
 
       index = (index + 1) % servers.length; // 移动到下一个索引
-      if (index === 0 && serverStatus.get(server) === 'free') {
+      if (index === 0 && serverStatus.get(servers[index]) === 'free') {
         log.debug('所有服务器忙碌，正常轮询');
         return servers[index]; // 完成一轮轮询，返回轮询索引，即使忙碌
       }
