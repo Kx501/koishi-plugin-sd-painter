@@ -381,7 +381,10 @@ export function apply(ctx: Context, config: Config) {
         start(endpoint);
         session.send(await process());
         end(endpoint);
-        if (monetary && sdMonetary) ctx.monetary.cost(userAid, sdMonetary);
+        if (monetary && sdMonetary && !failProcess) {
+          failProcess = false;
+          ctx.monetary.cost(userAid, sdMonetary);
+        }
       } else {
         // 超过最大任务数的处理逻辑
         session.send(Random.pick([
@@ -406,15 +409,8 @@ export function apply(ctx: Context, config: Config) {
         log.debug('选择子选项:', options);
 
         const wdMonetary = config.monetary.wd;
-        let userAid: number;
-        if (monetary && wdMonetary) {
-          userAid = (await ctx.database.get('binding', { pid: [session.userId] }, ['aid']))[0]?.aid;
-          const balance = (await ctx.database.get('monetary', { uid: userAid }, ['value']))[0]?.value;
-          if (balance < wdMonetary || balance === undefined || !ctx.monetary) {
-            ctx.monetary.gain(userAid, 0);
-            return '当前余额不足，请联系管理员充值VIP /doge/doge'
-          }
-        }
+        const userAid = await checkBalance(session, wdMonetary);
+        if (typeof userAid === 'string') return userAid; // 余额不足
 
         let endpoint = selectServer(session, options?.server);
         if (endpoint === '离线')
@@ -491,7 +487,10 @@ export function apply(ctx: Context, config: Config) {
         start(endpoint);
         session.send(await process());
         end(endpoint);
-        if (monetary && wdMonetary) ctx.monetary.cost(userAid, wdMonetary);
+        if (monetary && wdMonetary && !failProcess) {
+          failProcess = false;
+          ctx.monetary.cost(userAid, wdMonetary);
+        }
       } else {
         session.send(Random.pick([
           '这个任务有点难，我不想接>_<',
@@ -905,14 +904,13 @@ export function apply(ctx: Context, config: Config) {
 
 
   /**
-   * 异步函数：验证用户金额
+   * 异步函数：验证用户金额（非扣除！）
    * @param session 用户会话对象，包含用户信息
    * @param cost 扣除的金额，大于0时启用
    */
   async function checkBalance(session: Session, cost: number): Promise<number | string> {
     let userAid: number;
-    if (monetary && cost && !failProcess) {
-      failProcess = false;
+    if (monetary && cost) {
       if (ctx.monetary) {
         // 查询用户的账户ID
         userAid = (await ctx.database.get('binding', { pid: [session.userId] }, ['aid']))[0]?.aid;
