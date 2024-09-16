@@ -102,7 +102,7 @@ export function apply(ctx: Context, config: Config) {
     .option('fixAlgorithm', '-m <name> 修复算法')
     .option('secondPassSteps', '-b <number> 修复步数')
     .option('denoisingStrength', '-o <float> 修复降噪强度')
-    .option('hrScale', '-r <float> 修复比例')
+    .option('hrScale', '-r <float> 修复比例') // 目前只写了一种
     .option('adetailer', '-a ADetailer扩展')
     .option('server', '-x <number> 指定服务器编号')
     .option('noPositiveTags', '-G 禁用默认正向提示词')

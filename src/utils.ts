@@ -37,7 +37,8 @@ export async function promptHandle(ctx: Context, session: Session, config: Confi
       role: 'user',
       content: `${TransTXT}`
     }])
-    if (rollbackPrompt) txt = `${TransTXT},${txt}`;
+    log.debug(TransTXT);
+    if (rollbackPrompt) txt = TransTXT + ',' + txt;
     text = txt?.split(','); // 不用?会被阻塞
   }
 
