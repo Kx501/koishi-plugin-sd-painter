@@ -846,13 +846,15 @@ export function apply(ctx: Context, config: Config) {
 
       index = (index + 1) % servers.length; // 移动到下一个索引
       if (index === 0) {
-        try { serverStatus.get(servers[index]) === 'free' }
-        catch (e) {
-          handleServerError(e);
-          return servers[index - 1]
-        }
         log.debug('所有服务器忙碌，正常轮询');
-        return servers[index]; // 完成一轮轮询，返回轮询索引，即使忙碌
+        while (true) {
+          const server_ = servers[index];
+          if (serverStatus.get(server_) === 'offline') index = (index + 1) % servers.length; // 移动到下一个索引
+          else {
+            log.debug(`选择 ${index}号 服务器: ${server_}`);
+            return server_;
+          }
+        }
       }
     }
   }
