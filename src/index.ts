@@ -1,6 +1,6 @@
 import { Context, Dict, h, HTTP, Random, Session } from 'koishi';
 import { } from 'koishi-plugin-monetary'
-import { promptHandle } from './utils'
+import { checkBalance, promptHandle } from './utils'
 import { Config, log } from './config';
 import { samplerL, schedulerL, ad_modelL, wd_modelL } from './list';
 
@@ -118,7 +118,7 @@ export function apply(ctx: Context, config: Config) {
 
         //// 经济系统 ////
         const sdMonetary = config.monetary.sd;
-        const userAid = await checkBalance(session, sdMonetary);
+        const userAid = await checkBalance(ctx, session, monetary, sdMonetary);
         if (typeof userAid === 'string') return userAid; // 余额不足
 
         //// 读取配置 ////
@@ -409,7 +409,7 @@ export function apply(ctx: Context, config: Config) {
         log.debug('选择子选项:', options);
 
         const wdMonetary = config.monetary.wd;
-        const userAid = await checkBalance(session, wdMonetary);
+        const userAid = await checkBalance(ctx, session, monetary, wdMonetary);
         if (typeof userAid === 'string') return userAid; // 余额不足
 
         let endpoint = selectServer(session, options?.server);
@@ -900,28 +900,6 @@ export function apply(ctx: Context, config: Config) {
       }
     }
     return errorMessage;
-  }
-
-
-  /**
-   * 异步函数：验证用户金额（非扣除！）
-   * @param session 用户会话对象，包含用户信息
-   * @param cost 扣除的金额，大于0时启用
-   */
-  async function checkBalance(session: Session, cost: number): Promise<number | string> {
-    let userAid: number;
-    if (monetary && cost) {
-      if (ctx.monetary) {
-        // 查询用户的账户ID
-        userAid = (await ctx.database.get('binding', { pid: [session.userId] }, ['aid']))[0]?.aid;
-        // 查询用户的余额
-        let balance = (await ctx.database.get('monetary', { uid: userAid }, ['value']))[0]?.value;
-        // 检查余额是否足够，如果不足或未定义，则不扣除并返回提示信息
-        if (balance === undefined) ctx.monetary.gain(userAid, 0);
-        if (balance < cost) return '当前余额不足，请联系管理员充值VIP /doge/doge'
-        else return userAid;
-      } else throw new Error('请先安装monetary服务');
-    }
   }
 
 

@@ -3,7 +3,18 @@ import { } from '@koishijs/translator'
 import { } from 'koishi-plugin-davinci-003'
 import { Config, log } from './config';
 
-
+/**
+ * 处理提示词的异步函数
+ * 该函数根据配置参数处理输入的字符串，包括格式化、GPT增强、翻译和裁剪等步骤
+ * 
+ * @param ctx 上下文对象，包含必要的服务和方法
+ * @param session 会话对象，用于发送信息
+ * @param config 配置对象，决定处理流程的细节
+ * @param inputStr 待处理的输入字符串，默认为空字符串
+ * @param trans 布尔值，指示是否进行翻译，默认为false
+ * @param dvc 布尔值，指示是否使用GPT增强，默认为false
+ * @returns 返回处理后的字符串
+ */
 export async function promptHandle(ctx: Context, session: Session, config: Config, inputStr?: string, trans?: boolean, dvc?: boolean): Promise<string> {
   // 检查输入是否有效
   if (inputStr === '') return '';
@@ -179,3 +190,26 @@ const pronounMap = {
     'yours': 'theirs',
   }
 };
+
+
+
+/**
+ * 异步函数：验证用户金额（非扣除！）
+ * @param session 用户会话对象，包含用户信息
+ * @param cost 扣除的金额，大于0时启用
+ */
+export async function checkBalance(ctx: Context, session: Session, monetary: boolean, cost: number): Promise<number | string> {
+  let userAid: number;
+  if (monetary && cost) {
+    if (ctx.monetary) {
+      // 查询用户的账户ID
+      userAid = (await ctx.database.get('binding', { pid: [session.userId] }, ['aid']))[0]?.aid;
+      // 查询用户的余额
+      let balance = (await ctx.database.get('monetary', { uid: userAid }, ['value']))[0]?.value;
+      // 检查余额是否足够，如果不足或未定义，则不扣除并返回提示信息
+      if (balance === undefined) ctx.monetary.gain(userAid, 0);
+      if (balance < cost) return '当前余额不足，请联系管理员充值VIP /doge/doge'
+      else return userAid;
+    } else throw new Error('请先安装monetary服务');
+  }
+}
