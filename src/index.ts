@@ -73,6 +73,7 @@ export function apply(ctx: Context, config: Config) {
   };
 
   let taskNum = 0;
+  let failProcess = false;
   const servers = config.endpoint;
   const serverStatus = new Map<string, string>();
   for (const server of servers) {
@@ -828,9 +829,7 @@ export function apply(ctx: Context, config: Config) {
         log.debug(`选择 ${index}号 服务器: ${server}`);
         return server;
         // }
-      } else {
-        session.send('不存在该序列节点，自动选择一个空闲服务器');
-      }
+      } else session.send('不存在该序列节点，自动选择一个空闲服务器');
     }
 
     // 轮询检查逻辑
@@ -866,6 +865,7 @@ export function apply(ctx: Context, config: Config) {
    * @returns 处理后的错误消息
    */
   function handleServerError(error: Error): string {
+    failProcess = true;
     const errorMessage = `出错了: ${error.message}`;
     const urlPattern = /(?:https?:\/\/)[^ ]+/g;
     const match = errorMessage.match(urlPattern);
@@ -911,7 +911,8 @@ export function apply(ctx: Context, config: Config) {
    */
   async function checkBalance(session: Session, cost: number): Promise<number | string> {
     let userAid: number;
-    if (monetary && cost) {
+    if (monetary && cost && !failProcess) {
+      failProcess = false;
       if (ctx.monetary) {
         // 查询用户的账户ID
         userAid = (await ctx.database.get('binding', { pid: [session.userId] }, ['aid']))[0]?.aid;
