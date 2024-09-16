@@ -111,7 +111,7 @@ export const Config: Schema<Config> = Schema.intersect([
       ]).default('Automatic').description('调度器'),
       imgSize: Schema.tuple([Number, Number]).default([512, 512]).description(`宽度和高度(16的倍数)
   - 模板：
-  - 256x256、512x512、512x768、768x1280、832x1216、1024x1024、1280x720
+  - 256x256、512x512、512x768、768x1024、768x1280、832x1216、1024x1024、1280x720
   `),
       cfgScale: Schema.number().min(0).max(30).step(0.1).role('slider').default(7).description('引导系数，用于控制图像对提示词服从程度'),
       txt2imgSteps: Schema.number().min(1).max(150).step(1).role('slider').default(20).description('文生图步数'),

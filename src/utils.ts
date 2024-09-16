@@ -37,7 +37,7 @@ export async function promptHandle(ctx: Context, session: Session, config: Confi
       role: 'user',
       content: `${TransTXT}`
     }])
-    log.debug(TransTXT);
+    log.debug('GPT返回：', txt);
     if (rollbackPrompt) txt = TransTXT + ',' + txt;
     text = txt?.split(','); // 不用?会被阻塞
   }
