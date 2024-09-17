@@ -366,7 +366,7 @@ export function apply(ctx: Context, config: Config) {
               }
               if (outMeth === '详细信息') {
                 msgCol.children.push(h('message', attrs, JSON.stringify(response.data.parameters, null, 4)))
-                msgCol.children.push(h('message', attrs, JSON.stringify(response2.data.detections, null, 4)));
+                msgCol.children.push(h('message', attrs, JSON.stringify(response2?.data?.detections, null, 4)));
               };
               return msgCol;
             }
@@ -375,7 +375,6 @@ export function apply(ctx: Context, config: Config) {
             log.error('生成图片出错:', error);
             if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
             if (error?.response?.data?.detail) return `请求出错: ${error.response.data.detail}`;
-            if (outMeth === '详细信息') return error;
             return handleServerError(error);
           }
         }
