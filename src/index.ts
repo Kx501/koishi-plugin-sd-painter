@@ -76,8 +76,10 @@ export function apply(ctx: Context, config: Config) {
   let failProcess = false;
   const servers = config.endpoint;
   const serverStatus = new Map<string, string>();
+  const busyServerCounts = new Map<string, number>();
   for (const server of servers) {
     serverStatus.set(server, 'free'); // 默认所有服务器空闲
+    busyServerCounts.set(server, 0);
   }
 
   const servStr = servers.map((_, index) => `服务器 ${index}`).join('、'); // 作消息输出
@@ -812,51 +814,58 @@ export function apply(ctx: Context, config: Config) {
    * 
    * - 如果没有提供 `servIndex` 参数，则进入轮询逻辑。
    * - 如果所有服务器都是离线状态，返回。
-   * - 如果所有服务器都是忙碌状态，正常轮询。
+   * - 如果所有服务器都是忙碌状态，选择任务数最少的。
    */
   function selectServer(session: Session, servIndex?: number): string {
-    // 轮询索引
-    let index = taskNum % servers.length;
+    // 记录不同状态的服务器
+    let freeServers: string[] = [];
+    let busyServers: string[] = [];
+    let offlineServers: string[] = [];
+
+    // 初始化服务器状态
+    for (const server of servers) {
+      const status = serverStatus.get(server);
+      if (status === 'free') freeServers.push(server);
+      else if (status === 'busy') busyServers.push(server);
+      else if (status === 'offline') offlineServers.push(server);
+    }
 
     // 检查是否提供了server选项，因为0所以用undifined
-    if (servIndex !== undefined) {
+    if (servIndex !== undefined)
       if (servIndex < servers.length) {
-        index = servIndex;
-        const server = servers[index];
-        // if (serverStatus.get(server) === 'offline') return '离线';
-        // else {
-        log.debug(`选择 ${index}号 服务器: ${server}`);
+        const server = servers[servIndex];
+        log.debug(`选择 ${servIndex}号 服务器: ${server}`);
         return server;
-        // }
       } else session.send('不存在该序列节点，自动选择一个空闲服务器');
+
+    // 如果所有服务器都离线，直接返回
+    if (offlineServers.length === servers.length) return '离线';
+
+    // 如果有空闲服务器，返回第一个空闲服务器
+    if (freeServers.length > 0) {
+      const freeServer = freeServers[0];
+      log.debug(`选择空闲服务器: ${freeServer}`);
+      return freeServer;
     }
 
-    // 轮询检查逻辑
-    let offlineCount = 0;
-    while (true) {
-      const server = servers[index];
-      if (serverStatus.get(server) === 'offline') offlineCount++;
-      else if (serverStatus.get(server) === 'free') {
-        log.debug(`选择 ${index}号 服务器: ${server}`);
-        return server;
-      }
-
-      // 所有服务器离线时返回标记，并在外层提示
-      if (offlineCount === servers.length) return '离线';
-
-      index = (index + 1) % servers.length; // 移动到下一个索引
-      if (index === 0) {
-        log.debug('所有服务器忙碌，正常轮询');
-        while (true) {
-          const server_ = servers[index];
-          if (serverStatus.get(server_) === 'offline') index = (index + 1) % servers.length; // 移动到下一个索引
-          else {
-            log.debug(`选择 ${index}号 服务器: ${server_}`);
-            return server_;
-          }
-        }
+    // 如果没有空闲服务器，选择任务数最少的服务器
+    let minCount = Infinity;
+    let selectedServer = null;
+    for (const busyServer of busyServers) {
+      const count = busyServerCounts.get(busyServer);
+      if (count < minCount) {
+        minCount = count;
+        selectedServer = busyServer;
       }
     }
+    if (selectedServer) {
+      busyServerCounts.set(selectedServer, minCount + 1);
+      log.debug(`选择忙碌服务器: ${selectedServer}`);
+      return selectedServer;
+    }
+
+    // 返回错误信息
+    throw new Error('轮询时出错，无法分配任务');
   }
 
 
@@ -909,13 +918,16 @@ export function apply(ctx: Context, config: Config) {
   function start(server: string): void {
     taskNum++;
     serverStatus.set(server, 'busy'); // 先轮询后处理
+    busyServerCounts.set(server, (busyServerCounts.get(server)) + 1);
   }
 
 
   // 结束任务
   function end(server: string): void {
     taskNum--;
-    if (serverStatus.get(server) === 'busy') serverStatus.set(server, 'free');
+    if (serverStatus.get(server) === 'busy')
+      if (busyServerCounts.get(server) === 1) serverStatus.set(server, 'free');
+      else busyServerCounts.set(server, (busyServerCounts.get(server)) - 1);
   }
 
 }
