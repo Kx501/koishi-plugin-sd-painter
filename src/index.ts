@@ -124,7 +124,7 @@ export function apply(ctx: Context, config: Config) {
         if (typeof userAid === 'string') return userAid; // 余额不足
 
         //// 读取配置 ////
-        const { save, imgSize, cfgScale, txt2imgSteps: t2iSteps, img2imgSteps: i2iSteps, maxSteps, prePrompt, preNegPrompt, restoreFaces: resFaces } = config.IMG;
+        const { save, imgSize, cfgScale, txt2imgSteps: t2iSteps, img2imgSteps: i2iSteps, maxSteps, prePrompt: preProm, preNegPrompt: preNegProm, restoreFaces: resFaces } = config.IMG;
         const { enable: enableHiresFix, hrUpscaler, hrSecondPassSteps: hrSteps, denoisingStrength, fixWay } = config.IMG?.hiresFix
         const { type: hiresFixType, hrScale, hrResizeX, hrResizeY } = fixWay ?? {}
         const adEnable = config.AD.ADetailer.enable;
@@ -174,33 +174,29 @@ export function apply(ctx: Context, config: Config) {
         const hiresScale = options?.hrScale || hrScale;
 
         // 翻译
-        let tmpPrompt = _ || '';
-        let tmpNegPrompt = options?.negative || '';
-        tmpPrompt = await promptHandle(ctx, session, config, tmpPrompt, Trans, DVC);
-        tmpNegPrompt = await promptHandle(ctx, session, config, tmpNegPrompt, Trans, DVC);
+        let tmpProm = _ || '';
+        let tmpNegProm = options?.negative || '';
+        tmpProm = await promptHandle(ctx, session, config, tmpProm, Trans, DVC);
+        tmpNegProm = await promptHandle(ctx, session, config, tmpNegProm, Trans, DVC);
 
         // 确定位置
-        let { prompt, negativePrompt } = config.IMG;
-        if (!noPosTags && prompt) {
-          if (tmpPrompt === '') tmpPrompt = prompt;
+        let { prompt: prom, negativePrompt: negProm } = config.IMG;
+
+        if (!noPosTags && prom)
+          if (tmpProm === '') tmpProm = prom;
           else {
-            // 确定字符串之间是否需要逗号
-            const needsComma = prePrompt ? !prompt.endsWith(',') : !tmpPrompt.endsWith(',');
-            const comma = needsComma ? ',' : '';
-            // 连接
-            tmpPrompt = prePrompt ? prompt + comma + tmpPrompt : tmpPrompt + comma + prompt;
+            const nedCom = preProm ? !prom.endsWith(',') && !prom.endsWith('\n') : !tmpProm.endsWith(',') && !tmpProm.endsWith('\n');
+            const comma = nedCom ? ',' : '';
+            tmpProm = preProm ? prom + comma + tmpProm : tmpProm + comma + prom;
           }
-        }
-        if (!noNegTags && negativePrompt) {
-          if (tmpNegPrompt === '') tmpNegPrompt = negativePrompt;
+
+        if (!noNegTags && negProm)
+          if (tmpNegProm === '') tmpNegProm = negProm;
           else {
-            // 确定字符串之间是否需要逗号
-            const needsComma = preNegPrompt ? !negativePrompt.endsWith(',') : !tmpNegPrompt.endsWith(',');
-            const comma = needsComma ? ',' : '';
-            // 连接
-            tmpNegPrompt = preNegPrompt ? negativePrompt + comma + tmpNegPrompt : tmpNegPrompt + comma + negativePrompt;
+            const nedCom = preNegProm ? !negProm.endsWith(',') && !negProm.endsWith('\n') : !tmpNegProm.endsWith(',') && !tmpNegProm.endsWith('\n');
+            const comma = nedCom ? ',' : '';
+            tmpNegProm = preNegProm ? negProm + comma + tmpNegProm : tmpNegProm + comma + negProm;
           }
-        }
 
 
         //// 使用 ADetailer ////
@@ -241,13 +237,13 @@ export function apply(ctx: Context, config: Config) {
 
         // API请求体
         const payload1 = {
-          ...(prompt !== '' && { prompt: tmpPrompt }),
-          ...(negativePrompt !== '' && { negative_prompt: tmpNegPrompt }),
+          ...(prom !== '' && { prompt: tmpProm }),
+          ...(negProm !== '' && { negative_prompt: tmpNegProm }),
           seed: seed,
           sampler_name: smpName,
           scheduler: schName,
           steps: Math.min(steps, maxSteps),
-          ...((prompt !== '' || negativePrompt !== '') && { cfg_scale: cfg }),
+          ...((prom !== '' || negProm !== '') && { cfg_scale: cfg }),
           width: size[0],
           height: size[1],
           // ...((modelName || vaeName) && {
@@ -361,8 +357,8 @@ export function apply(ctx: Context, config: Config) {
               if (outMeth === '关键信息') {
                 msgCol.children.push(h('message', attrs, `使用 ${servers.indexOf(endpoint)}号 服务器`));
                 msgCol.children.push(h('message', attrs, `步数:${steps}\n尺寸:${size[0]}×${size[1]}\n服从度:${cfg}\n采样器:${smpName}\n调度器:${schName}`));
-                if (tmpPrompt) msgCol.children.push(h('message', attrs, `正向提示词:\n${tmpPrompt}`));
-                if (tmpNegPrompt) msgCol.children.push(h('message', attrs, `负向提示词:\n${tmpNegPrompt}`));
+                if (tmpProm) msgCol.children.push(h('message', attrs, `正向提示词:\n${tmpProm}`));
+                if (tmpNegProm) msgCol.children.push(h('message', attrs, `负向提示词:\n${tmpNegProm}`));
               }
               if (outMeth === '详细信息') {
                 msgCol.children.push(h('message', attrs, JSON.stringify(response.data.parameters, null, 4)))
