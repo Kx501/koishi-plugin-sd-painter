@@ -370,7 +370,8 @@ export function apply(ctx: Context, config: Config) {
           } catch (error) {
             log.error('生成图片出错:', error);
             if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
-            if (error?.response?.data?.detail) return `请求出错: ${error.response.data.detail}`;
+            else if (error?.data?.detail === 'Invalid image url') return '图片过期';
+            else if (error?.response?.data?.detail) return `请求出错: ${error.response.data.detail}`;
             return handleServerError(error);
           }
         }
@@ -475,8 +476,9 @@ export function apply(ctx: Context, config: Config) {
 
             return msgCol;
           } catch (error) {
-            log.error('反推出错:', error);
             if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
+            else if (error?.data?.detail === 'Invalid image url') return '图片过期';
+            else if (error?.response?.data?.detail) return `请求出错: ${error.response.data.detail}`;
             return handleServerError(error);
           }
         }
