@@ -99,7 +99,7 @@ export function apply(ctx: Context, config: Config) {
     .option('sampler', '-p <name> 采样器')
     .option('scheduler', '-d <name> 调度器')
     .option('translate', '-t 翻译')
-    .option('dvc', '-v 扩写提示词')
+    .option('dvc', '-v GPT翻译扩写提示词')
     .option('hiresFix', '-f 高分辨率修复')
     .option('fixAlgorithm', '-m <name> 修复算法')
     .option('secondPassSteps', '-b <number> 修复步数')
@@ -532,12 +532,9 @@ export function apply(ctx: Context, config: Config) {
 
 
 
-
+  ////////////// 找问题 //////////////
   // 注册 GetModels 指令
-  ctx.command('sd').subcommand('sdmodel <server_number> [sd_name] [vae_name]', '查询和切换模型，支持单个参数', {
-    checkUnknown: true,
-    checkArgCount: true
-  })
+  ctx.command('sd').subcommand('sdmodel <server_number> [sd_name] [vae_name]', '查询和切换模型，支持单个参数')
     .usage('输入名称时为切换模型，缺失时为查询模型')
     .option('sd', '-s 查询/切换SD模型')
     .option('vae', '-v 查询/切换Vae模型')
