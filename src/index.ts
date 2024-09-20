@@ -368,10 +368,7 @@ export function apply(ctx: Context, config: Config) {
             }
 
           } catch (error) {
-            log.error('生成图片出错:', error);
-            if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
-            else if (error?.data?.detail === 'Invalid image url') return '图片过期';
-            else if (error?.response?.data?.detail) return `请求出错: ${error.response.data.detail}`;
+            log.error('生成图片出错:', JSON.stringify(error, null, 4));
             return handleServerError(error);
           }
         }
@@ -476,9 +473,7 @@ export function apply(ctx: Context, config: Config) {
 
             return msgCol;
           } catch (error) {
-            if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
-            else if (error?.data?.detail === 'Invalid image url') return '图片过期';
-            else if (error?.response?.data?.detail) return `请求出错: ${error.response.data.detail}`;
+            log.debug('反推出错：', JSON.stringify(error, null, 4));
             return handleServerError(error);
           }
         }
@@ -523,16 +518,14 @@ export function apply(ctx: Context, config: Config) {
 
         return response.statusText;
       } catch (error) {
-        log.error('错误:', error.detail);
-        return `错误: ${error.message}`.replace(/https?:\/\/[^/]+/g, (url) => {
-          return url.replace(/\/\/[^/]+/, '//***');
-        });
+        log.error('终止任务出错:', JSON.stringify(error, null, 4));
+        return handleServerError(error);
       }
     });
 
 
 
-  ////////////// 找问题 //////////////
+
   // 注册 GetModels 指令
   ctx.command('sd').subcommand('sdmodel <server_number> [sd_name] [vae_name]', '查询和切换模型，支持单个参数')
     .usage('输入名称时为切换模型，缺失时为查询模型')
@@ -628,7 +621,7 @@ export function apply(ctx: Context, config: Config) {
 
                 if (response.status === 200) return '模型更换成功'; else return `模型更换失败: ${response.statusText}`;
               } catch (error) {
-                log.error('切换模型时出错:', error);
+                log.error('切换模型出错:', JSON.stringify(error, null, 4));
                 return handleServerError(error);
               }
             }
@@ -710,7 +703,7 @@ export function apply(ctx: Context, config: Config) {
 
 
       } catch (error) {
-        log.error('查询模型时出错:', error);
+        log.error('查询模型出错:', JSON.stringify(error, null, 4));
         return handleServerError(error);
       }
     });
@@ -744,10 +737,8 @@ export function apply(ctx: Context, config: Config) {
 
               return '配置已成功设置。';
             } catch (error) {
-              log.error('设置全局配置时出错:', error);
-              if (error.response?.status === 422) {
-                return '配置数据验证错误，请检查提供的数据格式。';
-              }
+              log.error('设置全局配置出错:', JSON.stringify(error, null, 4));
+              if (error.response?.status === 422) return '配置数据验证错误，请检查提供的数据格式。';
               return handleServerError(error);
             }
           }
@@ -755,12 +746,8 @@ export function apply(ctx: Context, config: Config) {
           start(endpoint);
           session.send(await process());
           end(endpoint);
-        } else {
-          session.send('当前有任务在进行，请等待所有任务完成');
-        }
-      } else {
-        session.send('管理员未启用该设置');
-      }
+        } else session.send('当前有任务在进行，请等待所有任务完成');
+      } else session.send('管理员未启用该设置');
     });
 
 
@@ -868,11 +855,21 @@ export function apply(ctx: Context, config: Config) {
    * @param error 错误对象
    * @returns 处理后的错误消息
    */
-  function handleServerError(error: Error): string {
+  function handleServerError(error: any): string {
     failProcess = true;
     if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
     else if (error?.data?.detail === 'Invalid image url') return '图片过期';
-    else if (error?.response?.data?.detail) return `请求出错: ${error.response.data.detail}`;
+    else if (error?.response?.data?.detail) {
+      let detail = error?.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        detail = detail.map(item => {
+          const { loc, msg, type } = item;
+          return `位置: ${loc.join(' -> ')}, 消息: ${msg}, 类型: ${type}`;
+        }).join('\n');
+      } else if (typeof detail === 'object') detail = JSON.stringify(detail, null, 4);
+      return `请求出错:\n${detail}`;
+    }
+
     const errorMessage = `出错了: ${error.message}`;
     const urlPattern = /(?:https?:\/\/)[^ ]+/g;
     const match = errorMessage.match(urlPattern);
