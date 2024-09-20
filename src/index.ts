@@ -864,10 +864,10 @@ export function apply(ctx: Context, config: Config) {
       if (Array.isArray(detail)) {
         detail = detail.map(item => {
           const { loc, msg, type } = item;
-          return `位置: ${loc.join(' -> ')}, 消息: ${msg}, 类型: ${type}`;
-        }).join('\n');
+          return `位置: ${loc.join(' -> ')},\n消息: ${msg},\n 类型: ${type}`;
+        });
       } else if (typeof detail === 'object') detail = JSON.stringify(detail, null, 4);
-      return `请求出错:\n${detail}`;
+    return `请求出错:\n${detail}`;
     }
 
     const errorMessage = `出错了: ${error.message}`;
