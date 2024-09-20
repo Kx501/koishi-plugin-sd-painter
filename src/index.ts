@@ -550,7 +550,7 @@ export function apply(ctx: Context, config: Config) {
         return '请选择指令的选项！';
       }
 
-      if (_ === undefined) return `请指定服务器编号，当前可用:\n${servStr}`;
+      if (!_) return `请指定服务器编号，当前可用:\n${servStr}`;
 
       // 选择服务器
       const endpoint = servers[_];
@@ -870,6 +870,9 @@ export function apply(ctx: Context, config: Config) {
    */
   function handleServerError(error: Error): string {
     failProcess = true;
+    if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
+    else if (error?.data?.detail === 'Invalid image url') return '图片过期';
+    else if (error?.response?.data?.detail) return `请求出错: ${error.response.data.detail}`;
     const errorMessage = `出错了: ${error.message}`;
     const urlPattern = /(?:https?:\/\/)[^ ]+/g;
     const match = errorMessage.match(urlPattern);
