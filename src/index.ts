@@ -368,7 +368,7 @@ export function apply(ctx: Context, config: Config) {
             }
 
           } catch (error) {
-            log.error('生成图片出错:', JSON.stringify(error, null, 4));
+            log.error('生成图片出错:', error);
             return handleServerError(error);
           }
         }
@@ -473,7 +473,7 @@ export function apply(ctx: Context, config: Config) {
 
             return msgCol;
           } catch (error) {
-            log.debug('反推出错：', JSON.stringify(error, null, 4));
+            log.debug('反推出错：', error);
             return handleServerError(error);
           }
         }
@@ -518,7 +518,7 @@ export function apply(ctx: Context, config: Config) {
 
         return response.statusText;
       } catch (error) {
-        log.error('终止任务出错:', JSON.stringify(error, null, 4));
+        log.error('终止任务出错:', error);
         return handleServerError(error);
       }
     });
@@ -703,7 +703,7 @@ export function apply(ctx: Context, config: Config) {
 
 
       } catch (error) {
-        log.error('查询模型出错:', JSON.stringify(error, null, 4));
+        log.error('查询模型出错:', error);
         return handleServerError(error);
       }
     });
@@ -864,7 +864,7 @@ export function apply(ctx: Context, config: Config) {
       if (Array.isArray(detail)) {
         detail = detail.map(item => {
           const { loc, msg, type } = item;
-          return `位置: ${loc.join(' -> ')}, 消息: ${msg}, 类型: ${type}`;
+          return `定位: ${loc.join(' -> ')}, 信息: ${msg}, 类型: ${type}`;
         }).join('\n');
       } else if (typeof detail === 'object') detail = JSON.stringify(detail, null, 4);
       return `请求出错:\n${detail}`;
