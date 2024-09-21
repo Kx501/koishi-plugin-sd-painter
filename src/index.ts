@@ -864,8 +864,8 @@ export function apply(ctx: Context, config: Config) {
       if (Array.isArray(detail)) {
         detail = detail.map(item => {
           const { loc, msg, type } = item;
-          return `定位: ${loc.join(' -> ')}, 信息: ${msg}, 类型: ${type}`;
-        }).join('\n');
+          return `定位: ${loc.join(' -> ')},\n信息: ${msg},\n 类型: ${type}`;
+        });
       } else if (typeof detail === 'object') detail = JSON.stringify(detail, null, 4);
       return `请求出错:\n${detail}`;
     }
