@@ -72,6 +72,7 @@ export interface Config {
     enable?: boolean;
     text?: string;
     rollbackPrompt?: boolean;
+    force?: boolean;
   };
   censor: {
     enable?: boolean;
@@ -241,13 +242,14 @@ export const Config: Schema<Config> = Schema.intersect([
     ]),
     useDVC: Schema.intersect([
       Schema.object({
-        enable: Schema.boolean().default(false).description('使用DVC服务扩写提示词'),
+        enable: Schema.boolean().default(false).description('使用DVC服务处理提示词（审核、翻译、扩写）'),
       }),
       Schema.union([
         Schema.object({
           enable: Schema.const(true).required(),
-          text: Schema.string().role('textarea', { rows: [2, 8] }).default('下面这些标签描绘了一个场景，如果标签是中文，请翻译成英文。请你想象这个场景，并添加更多英文标签来描述它。使用零散的单词或短语，每个标签之间用逗号隔开。比如，在描述一个白发猫娘时，你应该使用: white hair,cat girl,cat ears,cute girl,beautiful,lovely 等英文标签。在回答时，请包含原始标签，并且只需回答标签，无需额外说明。').description('发送给GPT的第一条消息'),
+          text: Schema.string().role('textarea', { rows: [2, 8] }).default('这些标签描绘了一个场景，请先去掉其中可能导致暴露私密部位的标签，然后将中文标签翻译成英文，并添加更多标签来描述它。使用碎片化的单词或短语，每个标签之间用英文逗号隔开。在回答时，请包含原始标签，并且无需额外说明。').description('发送给GPT的第一条消息'),
           rollbackPrompt: Schema.boolean().default(false).description('防止GPT不加上之前的提示词'),
+          forced: Schema.boolean().default(false).description('强制模式，都经过处理，用于审核'),
         }),
         Schema.object({}),
       ])
