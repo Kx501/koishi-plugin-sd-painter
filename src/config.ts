@@ -249,7 +249,7 @@ export const Config: Schema<Config> = Schema.intersect([
           enable: Schema.const(true).required(),
           text: Schema.string().role('textarea', { rows: [2, 8] }).default('这些标签描绘了一个场景，请先去掉其中可能导致暴露私密部位的标签，然后将中文标签翻译成英文，并添加更多标签来描述它。最后，只需列出所有标签，无需额外说明。').description('发送给GPT的第一条消息'),
           rollbackPrompt: Schema.boolean().default(false).description('防止GPT不加上之前的提示词'),
-          forced: Schema.boolean().default(false).description('强制模式，都经过处理，用于审核'),
+          force: Schema.boolean().default(false).description('强制模式，都经过处理，用于审核'),
         }),
         Schema.object({}),
       ])
