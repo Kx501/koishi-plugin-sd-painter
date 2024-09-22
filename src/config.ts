@@ -230,7 +230,7 @@ export const Config: Schema<Config> = Schema.intersect([
     ]),
     useTranslation: Schema.intersect([
       Schema.object({
-        enable: Schema.boolean().default(false).description('翻译非英文提示词'),
+        enable: Schema.boolean().default(false).description('使用翻译服务'),
       }),
       Schema.union([
         Schema.object({
