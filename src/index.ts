@@ -869,7 +869,7 @@ export function apply(ctx: Context, config: Config) {
       } else if (typeof detail === 'object') detail = JSON.stringify(detail, null, 4);
       return `请求出错:\n${detail}`;
     }
-    else if (error?.cause?.code === 'UND_ERR_HEADERS_TIMEOUT') return '请求超时'
+    else if (error?.cause?.code) return error.cause.code;
 
     const errorMessage = `出错了: ${error.message}`;
     const urlPattern = /(?:https?:\/\/)[^ ]+/g;
