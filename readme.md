@@ -4,7 +4,7 @@
 
 ## 说明
 
-简单对接 Stable Diffusion WebUI 与 Koishi，参考：[novelai-bot](https://github.com/koishijs/novelai-bot)
+简单对接 Stable Diffusion WebUI（理论支持 Forge）与 Koishi，参考：[novelai-bot](https://github.com/koishijs/novelai-bot)
 
 ### 🌟 插件功能
 

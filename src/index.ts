@@ -1,6 +1,6 @@
 import { Context, Dict, h, HTTP, Random, Session } from 'koishi';
 import { } from 'koishi-plugin-monetary'
-import { checkBalance, promptHandle } from './utils'
+import { checkBalance, promptHandle, download } from './utils'
 import { Config, log } from './config';
 import { samplerL, schedulerL, ad_modelL, wd_modelL } from './list';
 
@@ -143,8 +143,10 @@ export function apply(ctx: Context, config: Config) {
           log.debug('获取图片......');
           const hasProtocol = (imgUrl: string): boolean => /^(https?:\/\/)/i.test(imgUrl);
           if (!hasProtocol(initImages)) {
-            if (session.platform === 'onebot')
-              initImages = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
+            if (session.platform === 'onebot') {
+              const imgUrl = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
+              initImages = await download(ctx, imgUrl)
+            }
             else if (session.platform.includes('sandbox')) {
               initImages = h.select(session?.quote?.content, 'img')[0]?.attrs?.src.split(',')[1];
             }
@@ -157,7 +159,7 @@ export function apply(ctx: Context, config: Config) {
         const steps = options?.steps || (initImages ? i2iSteps : t2iSteps);
         const cfg = options?.cfgScale || cfgScale;
         const size = options?.size ? options?.size.split('x').map(Number) : imgSize;
-        const seed = options?.seed || -1;
+        const seed = options?.seed || Math.floor(Math.random() * Math.pow(2, 32));
         const smpName = options?.sampler || sampler;
         const schName = options?.scheduler || scheduler;
         const noPosTags = options?.noPositiveTags;
@@ -354,9 +356,9 @@ export function apply(ctx: Context, config: Config) {
             if (outMeth === '仅图片') return h.img(imgBuffer, 'image/png');
             else {
               msgCol.children.push(h.img(imgBuffer, 'image/png'));
+              msgCol.children.push(h('message', attrs, `使用 ${servers.indexOf(endpoint)}号 服务器`));
               if (outMeth === '关键信息') {
-                msgCol.children.push(h('message', attrs, `使用 ${servers.indexOf(endpoint)}号 服务器`));
-                msgCol.children.push(h('message', attrs, `步数:${steps}\n尺寸:${size[0]}×${size[1]}\n服从度:${cfg}\n采样器:${smpName}\n调度器:${schName}`));
+                msgCol.children.push(h('message', attrs, `步数:${steps}\n尺寸:${size[0]}×${size[1]}\n服从度:${cfg}\n采样器:${smpName}\n调度器:${schName}\n种子:${seed}`));
                 if (tmpProm) msgCol.children.push(h('message', attrs, `正向提示词:\n${tmpProm}`));
                 if (tmpNegProm) msgCol.children.push(h('message', attrs, `负向提示词:\n${tmpNegProm}`));
               }

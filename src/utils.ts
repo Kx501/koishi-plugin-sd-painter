@@ -1,4 +1,4 @@
-import { Context, Session } from 'koishi';
+import { arrayBufferToBase64, Context, Dict, Quester, Session } from 'koishi';
 import { } from '@koishijs/translator'
 import { } from 'koishi-plugin-davinci-003'
 import { Config, log } from './config';
@@ -212,5 +212,51 @@ export async function checkBalance(ctx: Context, session: Session, monetary: boo
       if (balance < cost) return '当前余额不足，请联系管理员充值VIP /doge/doge'
       else return userAid;
     } else throw new Error('请先安装monetary服务');
+  }
+}
+
+
+
+const MAX_OUTPUT_SIZE = 1048576;
+const MAX_CONTENT_SIZE = 10485760;
+const ALLOWED_TYPES = ['image/jpeg', 'image/png'];
+
+
+export async function download(ctx: Context, url: string, headers = {}): Promise<ImageData> {
+  const image = await ctx.http(url, { responseType: 'arraybuffer', headers });
+
+  if (+image.headers.get('content-length') > MAX_CONTENT_SIZE) throw new NetworkError('文件太大');
+
+  const mimetype = image.headers.get('content-type');
+  if (!ALLOWED_TYPES.includes(mimetype)) throw new NetworkError('不支持的文件类型');
+
+  const buffer = image.data;
+  const base64 = arrayBufferToBase64(buffer);
+  return { buffer, base64, dataUrl: `data:${mimetype};base64,${base64}` };
+}
+
+
+export interface ImageData {
+  buffer: ArrayBuffer;
+  base64: string;
+  dataUrl: string;
+}
+
+
+export class NetworkError extends Error {
+  constructor(message: string, public params = {}) {
+    super(message);
+  }
+
+  static catch = (mapping: Dict<string>) => (e: any) => {
+    if (Quester.Error.is(e)) {
+      const code = e.response?.status;
+      for (const key in mapping) {
+        if (code === +key) {
+          throw new NetworkError(mapping[key]);
+        }
+      }
+    }
+    throw e;
   }
 }

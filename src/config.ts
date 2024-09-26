@@ -222,8 +222,8 @@ export const Config: Schema<Config> = Schema.intersect([
       Schema.union([
         Schema.object({
           enable: Schema.const(true).required(),
-          sd: Schema.number().min(0).max(200).step(1).role('slider').default(20).description('绘画费用，设置为0关闭'),
-          wd: Schema.number().min(0).max(200).step(1).role('slider').default(10).description('反推费用，设置为0关闭'),
+          sd: Schema.number().min(0).max(200).step(1).default(20).description('绘画费用，设置为0关闭'),
+          wd: Schema.number().min(0).max(200).step(1).default(10).description('反推费用，设置为0关闭'),
         }),
         Schema.object({})
       ]),
@@ -242,7 +242,7 @@ export const Config: Schema<Config> = Schema.intersect([
     ]),
     useDVC: Schema.intersect([
       Schema.object({
-        enable: Schema.boolean().default(false).description('使用DVC服务处理提示词（审核、翻译、扩写）'),
+        enable: Schema.boolean().default(false).description('使用dvc服务处理提示词（审核、翻译、扩写）'),
       }),
       Schema.union([
         Schema.object({
