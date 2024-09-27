@@ -237,7 +237,7 @@ export async function download(ctx: Context, url: string, headers = {}): Promise
 
     const buffer = image.data;
     const base64 = arrayBufferToBase64(buffer);
-    return { base64: base64 };
+    return { base64: `base64, ${base64}` };
     // return { buffer, base64, dataUrl: `data:${mimetype};base64,${base64}` };
   } catch (e) {
     log.debug('下载图片失败:', e);
