@@ -48,11 +48,11 @@ export const usage = `
 
 // 插件主函数
 export function apply(ctx: Context, config: Config) {
-  ctx.on('message-created', (session: Session) => {
-    log.debug(JSON.stringify(session, null, 2))
-    log.debug(h.select(session?.elements, 'img')[0]?.attrs?.src)
-    log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
-  }, true)
+  // ctx.on('message-created', (session: Session) => {
+  //   log.debug(JSON.stringify(session, null, 2))
+  //   log.debug(h.select(session?.elements, 'img')[0]?.attrs?.src)
+  //   log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
+  // }, true)
 
   ctx.middleware((session, next) => {
     if (config.closingMode.enable) return config.closingMode.tips;
@@ -152,8 +152,9 @@ export function apply(ctx: Context, config: Config) {
               if (!imgUrl) imgUrl = h.select(session?.elements, 'img')[0]?.attrs?.src;
             }
           }
-          initImages = (await download(ctx, imgUrl)).base64;
-          if (initImages.info) return initImages.info;;
+          initImages = await download(ctx, imgUrl);
+          if (initImages.info) return initImages.info;
+          else initImages = initImages.base64;
           // log.debug('图生图图片参数处理结果:', initImages);
         }
 
