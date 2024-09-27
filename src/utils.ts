@@ -235,6 +235,7 @@ export async function download(ctx: Context, url: string, headers = {}): Promise
     return base64;
     // return { buffer, base64, dataUrl: `data:${mimetype};base64,${base64}` };
   } catch (e) {
+    log.debug('下载图片失败:', e);
     throw new NetworkError('下载图片失败');
   }
 }
