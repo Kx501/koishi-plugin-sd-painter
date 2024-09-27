@@ -153,7 +153,7 @@ export function apply(ctx: Context, config: Config) {
             }
           }
           initImages = await download(ctx, imgUrl);
-          if (!initImages) return '请检查图片链接或引用自己发送的图片'
+          if (initImages.info) return initImages.info;;
           // log.debug('图生图图片参数处理结果:', initImages);
         }
 
@@ -427,8 +427,9 @@ export function apply(ctx: Context, config: Config) {
           if (!imgUrl) imgUrl = h.select(session?.elements, 'img')[0]?.attrs?.src;
 
         }
-        _ = await download(ctx, imgUrl);
-        if (!_) return '请检查图片链接或引用自己发送的图片'
+        let tmp_ = await download(ctx, imgUrl);
+        if (tmp_.info) return tmp_.info;
+        else _ = tmp_.base64;
 
         if (taskNum === 0) {
           session.send(Random.pick([
@@ -861,21 +862,23 @@ export function apply(ctx: Context, config: Config) {
    */
   function handleServerError(error: any): string {
     failProcess = true;
-    let detail = error?.data?.detail;
-    if (detail) return `请求出错:\n${detail}`;
-    else if (detail = error?.response?.data?.detail) {
+    let detail: any;
+    if (error?.data?.detail) detail = error.data.detail;
+    if (error?.response?.data?.detail) {
+      detail = error.response.data.detail;
       if (Array.isArray(detail)) {
         detail = detail.map(item => {
           const { loc, msg, type } = item;
           return `定位: ${loc.join(' -> ')},\n信息: ${msg},\n 类型: ${type}`;
         });
       } else if (typeof detail === 'object') detail = JSON.stringify(detail, null, 4);
-      return `请求出错:\n${detail}`;
-    } else if (detail = error?.cause?.code) return `请求出错:\n${detail}`;
+      ;
+    }
+    if (error?.cause?.code) detail = error.cause.code;
 
-    const errorMessage = `出错了: ${error.message}`;
+    detail = error.message;
     const urlPattern = /(?:https?:\/\/)[^ ]+/g;
-    const match = errorMessage.match(urlPattern);
+    const match = detail.match(urlPattern);
 
     if (match && match[0]) {
       const fullUrl = match[0];
@@ -903,11 +906,11 @@ export function apply(ctx: Context, config: Config) {
 
         const maskedUrl = `${protocol}//${maskedHost}:${maskedPort}`;
         // 替换错误消息中的 URL
-        const maskedMessage = errorMessage.replace(urlPattern, maskedUrl);
+        const maskedMessage = detail.replace(urlPattern, maskedUrl);
         return maskedMessage;
       }
     }
-    return errorMessage;
+    return `请求出错:\n${detail}`;
   }
 
 

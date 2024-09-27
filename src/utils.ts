@@ -221,40 +221,27 @@ const MAX_OUTPUT_SIZE = 1048576;
 const MAX_CONTENT_SIZE = 10485760;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png'];
 
-export async function download(ctx: Context, url: string, headers = {}): Promise<string> {
+interface downResult {
+  base64?: string
+  info?: string
+}
+
+export async function download(ctx: Context, url: string, headers = {}): Promise<downResult> {
   try {
     const image = await ctx.http(url, { responseType: 'arraybuffer', headers });
 
-    if (+image.headers.get('content-length') > MAX_CONTENT_SIZE) throw new NetworkError('文件太大');
+    if (+image.headers.get('content-length') > MAX_CONTENT_SIZE) return { info: '文件太大' };
 
     const mimetype = image.headers.get('content-type');
-    if (!ALLOWED_TYPES.includes(mimetype)) throw new NetworkError('不支持的文件类型');
+    if (!ALLOWED_TYPES.includes(mimetype)) return { info: '不支持的文件类型' };
 
     const buffer = image.data;
     const base64 = arrayBufferToBase64(buffer);
-    return base64;
+    return { base64: base64 };
     // return { buffer, base64, dataUrl: `data:${mimetype};base64,${base64}` };
   } catch (e) {
     log.debug('下载图片失败:', e);
-    throw new NetworkError('下载图片失败');
-  }
-}
-
-
-export class NetworkError extends Error {
-  constructor(message: string, public params = {}) {
-    super(message);
-  }
-
-  static catch = (mapping: Dict<string>) => (e: any) => {
-    if (Quester.Error.is(e)) {
-      const code = e.response?.status;
-      for (const key in mapping) {
-        if (code === +key) {
-          throw new NetworkError(mapping[key]);
-        }
-      }
-    }
-    throw e;
-  }
+    if (e.response.data.retmsg) return { info: '图片过期' };
+    else return { info: '图片下载失败' }
+  };
 }
