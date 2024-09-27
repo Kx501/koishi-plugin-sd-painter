@@ -221,8 +221,7 @@ const MAX_OUTPUT_SIZE = 1048576;
 const MAX_CONTENT_SIZE = 10485760;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png'];
 
-
-export async function download(ctx: Context, url: string, headers = {}): Promise<ImageData> {
+export async function download(ctx: Context, url: string, headers = {}): Promise<string> {
   const image = await ctx.http(url, { responseType: 'arraybuffer', headers });
 
   if (+image.headers.get('content-length') > MAX_CONTENT_SIZE) throw new NetworkError('文件太大');
@@ -232,14 +231,8 @@ export async function download(ctx: Context, url: string, headers = {}): Promise
 
   const buffer = image.data;
   const base64 = arrayBufferToBase64(buffer);
-  return { buffer, base64, dataUrl: `data:${mimetype};base64,${base64}` };
-}
-
-
-export interface ImageData {
-  buffer: ArrayBuffer;
-  base64: string;
-  dataUrl: string;
+  return base64;
+  // return { buffer, base64, dataUrl: `data:${mimetype};base64,${base64}` };
 }
 
 

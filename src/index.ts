@@ -48,10 +48,11 @@ export const usage = `
 
 // 插件主函数
 export function apply(ctx: Context, config: Config) {
-  // ctx.on('message-created', (session: Session) => {
-  //   log.debug(JSON.stringify(session, null, 2))
-  //   log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
-  // }, true)
+  ctx.on('message-created', (session: Session) => {
+    log.debug(JSON.stringify(session, null, 2))
+    log.debug(h.select(session?.elements, 'img')[0]?.attrs?.src)
+    log.debug(JSON.stringify(h.select(session?.quote?.elements, 'img'), null, 2))
+  }, true)
 
   ctx.middleware((session, next) => {
     if (config.closingMode.enable) return config.closingMode.tips;
@@ -91,7 +92,7 @@ export function apply(ctx: Context, config: Config) {
   // k l q u w y, h不可用
   ctx.command('sd [tags]', 'AI画图')
     .option('negative', '-n <tags> 负向提示词')
-    .option('img2img', '-i [imgURL] 图生图，@图片或输入链接')
+    .option('img2img', '-i [imgURL] 图生图，@图片|输入链接|发送图片')
     .option('steps', '-s <number> 迭代步数')
     .option('cfgScale', '-c <float> 提示词服从度')
     .option('size', '-z <宽x高> 图像尺寸')
@@ -139,19 +140,20 @@ export function apply(ctx: Context, config: Config) {
         //// 参数处理 ////
         // 检查图生图参数
         let initImages = options?.img2img;
+        let imgUrl: string;
         if (options.hasOwnProperty('img2img')) {
           log.debug('获取图片......');
-          const hasProtocol = (imgUrl: string): boolean => /^(https?:\/\/)/i.test(imgUrl);
+          const hasProtocol = (imgUrl: string): boolean => /^(https?:\/\/)/i.test(imgUrl);  // 直接输入链接
           if (!hasProtocol(initImages)) {
-            if (session.platform === 'onebot') {
-              const imgUrl = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
-              initImages = await download(ctx, imgUrl)
+            if (['qq', 'qqguild'].includes(session.platform)) return '该平台暂不支持图生图';
+            // else if (session.platform.includes('sandbox')) initImages = h.select(session?.quote?.content, 'img')[0]?.attrs?.src.split(',')[1];   // 沙盒
+            else {
+              imgUrl = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
+              if (!imgUrl) imgUrl = h.select(session?.elements, 'img')[0]?.attrs?.src;
             }
-            else if (session.platform.includes('sandbox')) {
-              initImages = h.select(session?.quote?.content, 'img')[0]?.attrs?.src.split(',')[1];
-            }
-            if (!initImages) return '请检查图片链接或引用自己发送的图片消息'
           }
+          initImages = await download(ctx, imgUrl);
+          if (!initImages) return '请检查图片链接或引用自己发送的图片'
           // log.debug('图生图图片参数处理结果:', initImages);
         }
 
@@ -304,7 +306,7 @@ export function apply(ctx: Context, config: Config) {
             }
             log.debug('绘画API响应状态:', response.statusText);
             let imgBase: string = response.data.images[0];
-            // log.debug(image); // 开发其他平台时做参考
+            // log.debug(imgBase); // 开发其他平台时做参考
 
 
             //// 聊天记录 ////
@@ -415,18 +417,18 @@ export function apply(ctx: Context, config: Config) {
           else return '所有服务器离线';
 
         // 获取图片
-        log.debug('获取图片');
+        log.debug('获取图片......');
 
-        const hasProtocol = (imgUrl: string): boolean => /^(https?:\/\/)/i.test(imgUrl);
+        let imgUrl: string;
+        const hasProtocol = (imgUrl: string): boolean => /^(https?:\/\/)/i.test(imgUrl);  // 直接输入链接
         if (!hasProtocol(_)) {
-          if (session.platform === 'onebot')
-            _ = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
-          else if (session.platform.includes('sandbox'))
-            _ = h.select(session?.quote?.content, 'img')[0]?.attrs?.src.split(',')[1];
-          if (!_) return '请检查图片链接或引用自己发送的图片消息';
-        }
+          // else if (session.platform.includes('sandbox')) initImages = h.select(session?.quote?.content, 'img')[0]?.attrs?.src.split(',')[1];   // 沙盒
+          imgUrl = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
+          if (!imgUrl) imgUrl = h.select(session?.elements, 'img')[0]?.attrs?.src;
 
-        log.debug('获取图片参数:', _);
+        }
+        _ = await download(ctx, imgUrl);
+        if (!_) return '请检查图片链接或引用自己发送的图片'
 
         if (taskNum === 0) {
           session.send(Random.pick([
@@ -859,10 +861,16 @@ export function apply(ctx: Context, config: Config) {
    */
   function handleServerError(error: any): string {
     failProcess = true;
-    if (error?.data?.detail === 'Invalid encoded image') return '请引用自己发送的图片或检查图片链接';
-    else if (error?.data?.detail === 'Invalid image url') return '图片过期';
-    else if (error?.response?.data?.detail) {
-      let detail = error?.response?.data?.detail;
+    let detail = error?.data?.detail;
+    if (detail)
+      switch (detail) {
+        case 'Invalid encoded image':
+          return '请引用自己发送的图片或检查图片链接';
+        case 'Invalid image url':
+          return '图片过期';
+      }
+    else {
+      detail = error?.response?.data?.detail
       if (Array.isArray(detail)) {
         detail = detail.map(item => {
           const { loc, msg, type } = item;
@@ -871,7 +879,7 @@ export function apply(ctx: Context, config: Config) {
       } else if (typeof detail === 'object') detail = JSON.stringify(detail, null, 4);
       return `请求出错:\n${detail}`;
     }
-    else if (error?.cause?.code) return error.cause.code;
+    // else if (error?.cause?.code) return error.cause.code;
 
     const errorMessage = `出错了: ${error.message}`;
     const urlPattern = /(?:https?:\/\/)[^ ]+/g;
