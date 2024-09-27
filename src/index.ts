@@ -152,7 +152,7 @@ export function apply(ctx: Context, config: Config) {
               if (!imgUrl) imgUrl = h.select(session?.elements, 'img')[0]?.attrs?.src;
             }
           }
-          initImages = await download(ctx, imgUrl);
+          initImages = (await download(ctx, imgUrl)).base64;
           if (initImages.info) return initImages.info;;
           // log.debug('图生图图片参数处理结果:', initImages);
         }
