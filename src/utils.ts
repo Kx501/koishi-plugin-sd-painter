@@ -222,17 +222,21 @@ const MAX_CONTENT_SIZE = 10485760;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png'];
 
 export async function download(ctx: Context, url: string, headers = {}): Promise<string> {
-  const image = await ctx.http(url, { responseType: 'arraybuffer', headers });
+  try {
+    const image = await ctx.http(url, { responseType: 'arraybuffer', headers });
 
-  if (+image.headers.get('content-length') > MAX_CONTENT_SIZE) throw new NetworkError('文件太大');
+    if (+image.headers.get('content-length') > MAX_CONTENT_SIZE) throw new NetworkError('文件太大');
 
-  const mimetype = image.headers.get('content-type');
-  if (!ALLOWED_TYPES.includes(mimetype)) throw new NetworkError('不支持的文件类型');
+    const mimetype = image.headers.get('content-type');
+    if (!ALLOWED_TYPES.includes(mimetype)) throw new NetworkError('不支持的文件类型');
 
-  const buffer = image.data;
-  const base64 = arrayBufferToBase64(buffer);
-  return base64;
-  // return { buffer, base64, dataUrl: `data:${mimetype};base64,${base64}` };
+    const buffer = image.data;
+    const base64 = arrayBufferToBase64(buffer);
+    return base64;
+    // return { buffer, base64, dataUrl: `data:${mimetype};base64,${base64}` };
+  } catch (e) {
+    throw new NetworkError('下载图片失败');
+  }
 }
 
 
