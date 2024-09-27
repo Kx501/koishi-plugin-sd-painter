@@ -868,18 +868,17 @@ export function apply(ctx: Context, config: Config) {
           return '请引用自己发送的图片或检查图片链接';
         case 'Invalid image url':
           return '图片过期';
-      }
-    else {
-      detail = error?.response?.data?.detail
-      if (Array.isArray(detail)) {
-        detail = detail.map(item => {
-          const { loc, msg, type } = item;
-          return `定位: ${loc.join(' -> ')},\n信息: ${msg},\n 类型: ${type}`;
-        });
-      } else if (typeof detail === 'object') detail = JSON.stringify(detail, null, 4);
-      return `请求出错:\n${detail}`;
-    }
-    // else if (error?.cause?.code) return error.cause.code;
+        case undefined:
+          return `请求出错:\n${detail}`;
+      } else if (detail = error?.response?.data?.detail) {
+        if (Array.isArray(detail)) {
+          detail = detail.map(item => {
+            const { loc, msg, type } = item;
+            return `定位: ${loc.join(' -> ')},\n信息: ${msg},\n 类型: ${type}`;
+          });
+        } else if (typeof detail === 'object') detail = JSON.stringify(detail, null, 4);
+        return `请求出错:\n${detail}`;
+      } else if (detail = error?.cause?.code) return `请求出错:\n${detail}`;
 
     const errorMessage = `出错了: ${error.message}`;
     const urlPattern = /(?:https?:\/\/)[^ ]+/g;
