@@ -865,7 +865,7 @@ export function apply(ctx: Context, config: Config) {
     failProcess = true;
     let detail: any;
     if (error?.data?.detail) detail = error.data.detail;
-    if (error?.response?.data?.detail) {
+    else if (error?.response?.data?.detail) {
       detail = error.response.data.detail;
       if (Array.isArray(detail)) {
         detail = detail.map(item => {
@@ -875,9 +875,9 @@ export function apply(ctx: Context, config: Config) {
       } else if (typeof detail === 'object') detail = JSON.stringify(detail, null, 4);
       ;
     }
-    if (error?.cause?.code) detail = error.cause.code;
+    else if (error?.cause?.code) detail = error.cause.code;
 
-    detail = error.message;
+    else detail = error.message;
     const urlPattern = /(?:https?:\/\/)[^ ]+/g;
     const match = detail.match(urlPattern);
 
