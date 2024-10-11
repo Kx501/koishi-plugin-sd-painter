@@ -865,21 +865,22 @@ export function apply(ctx: Context, config: Config) {
   function handleServerError(error: any): string {
     failProcess = true;
     let detail: any;
-    if (error?.data?.detail) detail = error.data.detail;
-    else if (error?.response?.data?.detail) {
+    // if (error?.data?.detail) detail = error.data.detail;
+    if (error?.response?.data?.detail) {
       detail = error.response.data.detail;
       if (Array.isArray(detail)) {
         detail = detail.map(item => {
           const { loc, msg, type } = item;
-          return `定位: ${loc.join(' -> ')},\n信息: ${msg},\n 类型: ${type}`;
+          return `参数定位: ${loc.join(' -> ')},\n错误信息: ${msg},\n 错误类型: ${type}`;
         });
       } else if (typeof detail === 'object') detail = JSON.stringify(detail, null, 4);
-      ;
     }
-    else if (error?.cause?.code) detail = error.cause.code;
+    // else if (error?.cause?.cause?.code) detail = error.cause.cause.code;
     else detail = error.message;
     log.debug('调试1', error.name);
-    log.debug('调试2', error.cause);
+    log.debug('调试2', error.message);
+    log.debug('调试3', error.cause);
+    log.debug('调试4', error.cause?.cause.code);
 
     const urlPattern = /(?:https?:\/\/)[^ ]+/g;
     const match = detail.match(urlPattern);
@@ -914,6 +915,7 @@ export function apply(ctx: Context, config: Config) {
         return maskedMessage;
       }
     }
+    if (detail === 'context disposed') return '插件重载，任务终止';
     return `请求出错:\n${detail}`;
   }
 
