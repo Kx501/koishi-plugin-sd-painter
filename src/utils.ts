@@ -241,6 +241,6 @@ export async function download(ctx: Context, url: string, headers = {}): Promise
     // return { buffer, base64, dataUrl: `data:${mimetype};base64,${base64}` };
   } catch (e) {
     log.debug('下载图片失败:', e);
-    return { info: '获取图片参数失败，可能的错误类型：\n1.错误的图片链接\n2.非本人发送的图片\n3.图片已过期' }
+    return { info: '获取图片参数失败，可能的错误类型：\n1.未引用图片\n2.错误的图片链接\n3.图片已过期\n4.非本人发送的图片' }
   };
 }

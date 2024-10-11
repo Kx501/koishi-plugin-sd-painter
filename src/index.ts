@@ -3,6 +3,7 @@ import { } from 'koishi-plugin-monetary'
 import { checkBalance, promptHandle, download } from './utils'
 import { Config, log } from './config';
 import { samplerL, schedulerL, ad_modelL, wd_modelL } from './list';
+import { debug } from 'console';
 
 export const name = 'sd-painter';
 export const inject = {
@@ -876,8 +877,10 @@ export function apply(ctx: Context, config: Config) {
       ;
     }
     else if (error?.cause?.code) detail = error.cause.code;
-
     else detail = error.message;
+    log.debug('调试1', error.name);
+    log.debug('调试2', error.cause);
+
     const urlPattern = /(?:https?:\/\/)[^ ]+/g;
     const match = detail.match(urlPattern);
 
