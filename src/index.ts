@@ -534,8 +534,10 @@ export function apply(ctx: Context, config: Config) {
 
 
   // 注册 GetModels 指令
-  ctx.command('sd').subcommand('sdmodel <server_number> [sd_name] [vae_name]', '查询和切换模型，支持单个参数')
+  ctx.command('sd').subcommand('sdswitch <server_number> [sd_name] [vae_name]', '查询和切换模型，支持单个参数')
     .usage('输入名称时为切换模型，缺失时为查询模型')
+    .option('server', '-x 查询可用服务器编号') // servStr
+
     .option('sd', '-s 查询/切换SD模型')
     .option('vae', '-v 查询/切换Vae模型')
     .option('embeddeding', '-e 查询可用的嵌入模型')
@@ -589,7 +591,7 @@ export function apply(ctx: Context, config: Config) {
         // 查询
         if ((sd || vae) && !(_1 || _2)) {
           log.debug('调用查询SD/Vae模型 API');
-          const path = sd ? 'sd-models' : 'sd-vae';
+          const path = sd ? 'sd-models' : 'sd-vae';   // forge sd-vae=>sd_modules
           const response = await ctx.http('get', `${endpoint}/sdapi/v1/${path}`, { headers: header2 });
           log.debug('查询SD/Vae模型API响应状态:', response.statusText);
           const models = response.data;
@@ -667,7 +669,7 @@ export function apply(ctx: Context, config: Config) {
           log.debug('查询超网络模型API响应状态:', response.statusText);
           const hybNets = response.data;
 
-          const result = hybNets.map((hn: { filename: string; model_name: string }) => {
+          const result = hybNets.map((hn: { model_name: string; filename: string; }) => { // forge { model_name: string; filename: string; } ???
             const filename = extractFileName(hn.filename);
             return `模型: ${hn.model_name}\n文件: ${filename}`;
           }).join('\n\n');
@@ -759,9 +761,11 @@ export function apply(ctx: Context, config: Config) {
 
 
 
+  // To do
+  // 并入查询，改变指令名，并适配forge
 
   // 列出可用的基础设置
-  ctx.command('sd').subcommand('sdlist [s1s2s3s4s5]', '查询服务器、采样器、调度器、AD模型、WD模型列表，暂不支持自定义模型')
+  ctx.command('sd').subcommand('sdlist [s1s2s3s4s5]', '查询服务器、采样器、调度器、AD模型列表，暂不支持自定义模型')
     .action(({ options }, s1s2s3s4s5) => {
 
       if (!Object.keys(options).includes('server')) {
@@ -777,10 +781,8 @@ export function apply(ctx: Context, config: Config) {
           return `调度器列表:\n${schedulerL.join('\n')}`;
         case 's4':
           return `AD模型列表:\n${ad_modelL.join('\n')}`;
-        case 's5':
-          return `WD模型列表:\n${wd_modelL.join('\n')}`;
         default:
-          return '请选择s1/s2/s3/s4/s5';
+          return '请选择s1/s2/s3/s4';
       }
     })
 
