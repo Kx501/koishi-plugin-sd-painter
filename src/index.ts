@@ -2,8 +2,7 @@ import { Context, Dict, h, HTTP, Random, Session } from 'koishi';
 import { } from 'koishi-plugin-monetary'
 import { checkBalance, promptHandle, download } from './utils'
 import { Config, log } from './config';
-import { samplerL, schedulerL, ad_modelL, wd_modelL } from './list';
-import { debug } from 'console';
+import { samplerL, schedulerL, ad_modelL } from './list';
 
 export const name = 'sd-painter';
 export const inject = {
@@ -76,6 +75,7 @@ export function apply(ctx: Context, config: Config) {
 
   let taskNum = 0;
   let failProcess = false;
+  let endpoint: string;
   const servers = config.endpoint;
   const serverStatus = new Map<string, string>();
   const busyServerCounts = new Map<string, number>();
@@ -133,7 +133,7 @@ export function apply(ctx: Context, config: Config) {
         const useTrans = config.useTranslation.enable;
 
         // 选择服务器
-        let endpoint = selectServer(session, options?.server);
+        endpoint = selectServer(session, options?.server);
         if (endpoint === '离线')
           if (options?.server) return '所选服务器离线';
           else return '所有服务器离线';
@@ -413,7 +413,7 @@ export function apply(ctx: Context, config: Config) {
         const userAid = await checkBalance(ctx, session, monetary, wdMonetary);
         if (typeof userAid === 'string') return userAid; // 余额不足
 
-        let endpoint = selectServer(session, options?.server);
+        endpoint = selectServer(session, options?.server);
         if (endpoint === '离线')
           if (options?.server) return '所选服务器离线';
           else return '所有服务器离线';
@@ -514,7 +514,7 @@ export function apply(ctx: Context, config: Config) {
       try {
         log.debug('调用中断 API');
 
-        const endpoint = servers[server_number];
+        endpoint = servers[server_number];
 
         // Interruptapi
         const response = await ctx.http('post', `${endpoint}/sdapi/v1/interrupt`, {
@@ -534,16 +534,15 @@ export function apply(ctx: Context, config: Config) {
 
 
   // 注册 GetModels 指令
-  ctx.command('sd').subcommand('sdswitch <server_number> [sd_name] [vae_name]', '查询和切换模型，支持单个参数')
+  ctx.command('sd').subcommand('sdquery <server_number> [sd_name] [vae_name]', '查询和切换模型，支持单个参数')
     .usage('输入名称时为切换模型，缺失时为查询模型')
-    .option('server', '-x 查询可用服务器编号') // servStr
-
-    .option('sd', '-s 查询/切换SD模型')
+    .option('sd', '-s 查询/切换绘画模型')
     .option('vae', '-v 查询/切换Vae模型')
     .option('embeddeding', '-e 查询可用的嵌入模型')
     .option('hybridnetwork', '-n 查询可用的超网络模型')
-    .option('lora', '-l 查询可用的loras模型')
-    .option('wd', '-w 查询可用的WD模型')
+    .option('lora', '-l 查询可用的lora模型')
+    .option('sampler', '-p 查询可用的采样器')
+    .option('scheduler', '-d 查询可用的调度器')
     .action(async ({ options, session }, _, _1?, _2?) => {
       log.debug('选择子选项', options)
 
@@ -555,7 +554,7 @@ export function apply(ctx: Context, config: Config) {
       if (!_) return `请指定服务器编号，当前可用:\n${servStr}`;
 
       // 选择服务器
-      const endpoint = servers[_];
+      endpoint = servers[_];
 
       let sdName: string, vaeName: string;
       const sd = options?.sd;
@@ -563,7 +562,8 @@ export function apply(ctx: Context, config: Config) {
       const emb = options?.embeddeding;
       const hybNet = options?.hybridnetwork;
       const lora = options?.lora;
-      const wd = options?.wd;
+      const sampler = options?.sampler;
+      const scheduler = options?.scheduler;
 
       if (_2 === undefined) {
         if (options?.sd) {
@@ -686,9 +686,8 @@ export function apply(ctx: Context, config: Config) {
           log.debug('查询Lora模型API响应状态:', response.statusText);
           const loras = response.data;
 
-          const result = loras.map((lora: { filename: string; model_name: string; }) => {
-            const fileName = extractFileName(lora.filename);
-            return `模型: ${lora.model_name}\n文件: ${fileName}`;
+          const result = loras.map((lora: any) => {
+            return `名称: ${lora.alias}\n文件: ${lora.name}`;
           }).join('\n\n');
 
           if (result) {
@@ -697,19 +696,15 @@ export function apply(ctx: Context, config: Config) {
           } else return `未查询到Lora模型信息。`;
         }
 
-        if (wd) {
-          log.debug('调用查询WD模型 API');
-          const response = await ctx.http('get', `${endpoint}/tagger/v1/interrogators`, { headers: header2 });
-          log.debug('查询WD模型API响应状态:', response.statusText);
-          const models = response.data.models;
-
-          const result = models.map((modelName: string) => `模型: ${modelName}`).join('\n\n');
-          if (result) {
-            msgCol.children.push(h('message', attrs, result));
-            return msgCol;
-          } else return `未查询到WD模型信息。`;
+        if (sampler) {
+          log.debug('查询采样器');
+          return `采样器列表:\n${samplerL.join('\n')}`;
         }
 
+        if (scheduler) {
+          log.debug('查询调度器');
+          return `调度器列表:\n${schedulerL.join('\n')}`;
+        }
 
       } catch (error) {
         log.error('查询模型出错:', error);
@@ -732,7 +727,7 @@ export function apply(ctx: Context, config: Config) {
           if (server_number === undefined)`请指定服务器编号，当前可用:\n${servStr}`;
 
           // 选择服务器
-          const endpoint = servers[server_number];
+          endpoint = servers[server_number];
 
           async function process() {
             try {
@@ -758,33 +753,6 @@ export function apply(ctx: Context, config: Config) {
         } else session.send('当前有任务在进行，请等待所有任务完成');
       } else session.send('管理员未启用该设置');
     });
-
-
-
-  // To do
-  // 并入查询，改变指令名，并适配forge
-
-  // 列出可用的基础设置
-  ctx.command('sd').subcommand('sdlist [s1s2s3s4s5]', '查询服务器、采样器、调度器、AD模型列表，暂不支持自定义模型')
-    .action(({ options }, s1s2s3s4s5) => {
-
-      if (!Object.keys(options).includes('server')) {
-        return `请指定服务器编号，当前可用:\n${servStr}`;
-      }
-
-      switch (s1s2s3s4s5) {
-        case 's1':
-          return `服务器列表:\n${servStr}`;
-        case 's2':
-          return `采样器列表:\n${samplerL.join('\n')}`;
-        case 's3':
-          return `调度器列表:\n${schedulerL.join('\n')}`;
-        case 's4':
-          return `AD模型列表:\n${ad_modelL.join('\n')}`;
-        default:
-          return '请选择s1/s2/s3/s4';
-      }
-    })
 
 
 
@@ -882,42 +850,14 @@ export function apply(ctx: Context, config: Config) {
     log.debug('调试1', error.name);
     log.debug('调试2', error.message);
     log.debug('调试3', error.cause);
-    log.debug('调试4', error.cause?.cause.code);
+    log.debug('调试4',);
 
-    const urlPattern = /(?:https?:\/\/)[^ ]+/g;
-    const match = detail.match(urlPattern);
-
-    if (match && match[0]) {
-      const fullUrl = match[0];
-      const serverAddress = fullUrl.split('/').slice(0, 3).join('/');
-      // 确定地址
-      const matchingServer = servers.find(s => s === serverAddress);
-      if (matchingServer) {
-        serverStatus.set(matchingServer, 'offline'); // 标记服务器为离线
-        return `${servers.indexOf(matchingServer)}号 服务器已离线`;
-      } else {
-        // 脱敏处理
-        const { protocol, hostname, port } = new URL(fullUrl);
-        let maskedHost: string;
-        if (/^(\d+(\.\d+){3})$/.test(hostname)) {
-          // 处理 IP 地址
-          const ipParts = hostname.split('.');
-          maskedHost = [ipParts[0], '***', '***', ipParts[3]].join('.');
-        } else {
-          // 处理域名
-          const domainParts = hostname.split('.');
-          maskedHost = [domainParts[0], '***', domainParts[domainParts.length - 1]].join('.');
-        }
-        // 处理端口
-        const maskedPort = port.slice(0, -3) + '***';
-
-        const maskedUrl = `${protocol}//${maskedHost}:${maskedPort}`;
-        // 替换错误消息中的 URL
-        const maskedMessage = detail.replace(urlPattern, maskedUrl);
-        return maskedMessage;
-      }
+    if (error?.cause?.cause.code === 'ECONNRESET' || detail === 'Bad Gateway') {
+      serverStatus.set(endpoint, 'offline'); // 标记服务器为离线
+      return `${servers.indexOf(endpoint)}号 服务器已离线，请再次尝试`;
     }
-    if (detail === 'context disposed') return '插件重载，任务终止';
+    else if (detail === 'context disposed') return '插件重载，请再次尝试';
+
     return `请求出错:\n${detail}`;
   }
 
