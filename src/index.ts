@@ -850,7 +850,7 @@ export function apply(ctx: Context, config: Config) {
     log.debug('调试1', error.name);
     log.debug('调试2', error.message);
     log.debug('调试3', error.cause);
-    log.debug('调试4', error?.cause?.cause.code);
+    log.debug('调试4', error.cause.cause.code);
 
     if (error?.cause?.cause.code === 'ECONNRESET' || detail === 'Bad Gateway') {
       serverStatus.set(endpoint, 'offline'); // 标记服务器为离线
