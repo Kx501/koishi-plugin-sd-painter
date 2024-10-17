@@ -146,7 +146,7 @@ export function apply(ctx: Context, config: Config) {
           log.debug('获取图片......');
           const hasProtocol = (imgUrl: string): boolean => /^(https?:\/\/)/i.test(imgUrl);  // 直接输入链接
           if (!hasProtocol(initImages)) {
-            if (['qq', 'qqguild'].includes(session.platform)) return '该平台暂不支持图生图';
+            if (session.platform.includes('qq')) return '该平台暂不支持图生图';
             // else if (session.platform.includes('sandbox')) initImages = h.select(session?.quote?.content, 'img')[0]?.attrs?.src.split(',')[1];   // 沙盒
             else {
               imgUrl = h.select(session?.quote?.elements, 'img')[0]?.attrs?.src;
@@ -852,11 +852,13 @@ export function apply(ctx: Context, config: Config) {
     log.debug('调试3', error.cause);
     log.debug('调试4', error.cause.cause.code);
 
-    if (error?.cause?.cause.code === 'ECONNRESET' || detail === 'Bad Gateway') {
-      serverStatus.set(endpoint, 'offline'); // 标记服务器为离线
-      return `${servers.indexOf(endpoint)}号 服务器已离线，请再次尝试`;
+    for (let str of ['Gateway', 'fetch']) {
+      if (detail.includes(str)) {
+        serverStatus.set(endpoint, 'offline'); // 标记服务器为离线
+        return `${servers.indexOf(endpoint)}号 服务器已离线，请再次尝试`;
+      }
+      else if (detail === 'context disposed') return '插件重载，请再次尝试';
     }
-    else if (detail === 'context disposed') return '插件重载，请再次尝试';
 
     return `请求出错:\n${detail}`;
   }
