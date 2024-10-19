@@ -286,7 +286,7 @@ export function apply(ctx: Context, config: Config) {
         } else session.send(`在画了在画了，当前 ${taskNum + 1} 个任务......`)
 
         //// 开始请求 ////
-        async function process() {
+        async function process(userAid: number) {
           try {
             //// 调用绘画API ////
             let response: HTTP.Response<any>;
@@ -369,6 +369,9 @@ export function apply(ctx: Context, config: Config) {
                 msgCol.children.push(h('message', attrs, JSON.stringify(response.data.parameters, null, 4)))
                 msgCol.children.push(h('message', attrs, JSON.stringify(response2?.data?.detections, null, 4)));
               };
+
+              if (monetary && sdMonetary) ctx.monetary.cost(userAid, sdMonetary);
+
               return msgCol;
             }
 
@@ -379,9 +382,9 @@ export function apply(ctx: Context, config: Config) {
         }
 
         start(endpoint);
-        session.send(await process());
+        session.send(await process(userAid));
         end(endpoint);
-        if (monetary && sdMonetary)  ctx.monetary.cost(userAid, sdMonetary);
+
       } else {
         // 超过最大任务数的处理逻辑
         session.send(Random.pick([
@@ -439,7 +442,7 @@ export function apply(ctx: Context, config: Config) {
         } else session.send(`在推了在推了，当前 ${taskNum + 1} 个任务......`)
 
         // Interrogateapi
-        async function process() {
+        async function process(userAid: number) {
           const { tagger, threshold: wThreshold } = config.WD;
 
           const payload = {
@@ -474,6 +477,8 @@ export function apply(ctx: Context, config: Config) {
             msgCol.children.push(h('message', attrs, `使用 ${servers.indexOf(endpoint)}号 服务器`));
             msgCol.children.push(h('message', attrs, `反推结果:\n${result}`));
 
+            if (monetary && wdMonetary) ctx.monetary.cost(userAid, wdMonetary);
+
             return msgCol;
           } catch (error) {
             log.debug('反推出错：', error);
@@ -482,14 +487,13 @@ export function apply(ctx: Context, config: Config) {
         }
 
         start(endpoint);
-        session.send(await process());
+        session.send(await process(userAid));
         end(endpoint);
-        if (monetary && wdMonetary)  ctx.monetary.cost(userAid, wdMonetary);
+
       } else {
         session.send(Random.pick([
-          '这个任务有点难，我不想接>_<',
           '脑子转不过来了，啊吧啊吧--',
-          '推导不出来，你来推吧！'
+          '忙不过来啦！'
         ]));
       }
     });
