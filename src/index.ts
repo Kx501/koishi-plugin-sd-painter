@@ -74,7 +74,6 @@ export function apply(ctx: Context, config: Config) {
   };
 
   let taskNum = 0;
-  let failProcess = false;
   let endpoint: string;
   const servers = config.endpoint;
   const serverStatus = new Map<string, string>();
@@ -382,10 +381,7 @@ export function apply(ctx: Context, config: Config) {
         start(endpoint);
         session.send(await process());
         end(endpoint);
-        if (monetary && sdMonetary && !failProcess) {
-          failProcess = false;
-          ctx.monetary.cost(userAid, sdMonetary);
-        }
+        if (monetary && sdMonetary)  ctx.monetary.cost(userAid, sdMonetary);
       } else {
         // 超过最大任务数的处理逻辑
         session.send(Random.pick([
@@ -488,10 +484,7 @@ export function apply(ctx: Context, config: Config) {
         start(endpoint);
         session.send(await process());
         end(endpoint);
-        if (monetary && wdMonetary && !failProcess) {
-          failProcess = false;
-          ctx.monetary.cost(userAid, wdMonetary);
-        }
+        if (monetary && wdMonetary)  ctx.monetary.cost(userAid, wdMonetary);
       } else {
         session.send(Random.pick([
           '这个任务有点难，我不想接>_<',
@@ -833,7 +826,6 @@ export function apply(ctx: Context, config: Config) {
    * @returns 处理后的错误消息
    */
   function handleServerError(error: any): string {
-    failProcess = true;
     let detail: any;
     // if (error?.data?.detail) detail = error.data.detail;
     if (error?.response?.data?.detail) {
