@@ -7,7 +7,7 @@ import { samplerL, schedulerL, ad_modelL } from './list';
 export const name = 'sd-painter';
 export const inject = {
   required: ['http'],
-  optional: ['translator', 'dvc', 'database', 'monetary']
+  optional: ['translator', 'database', 'monetary'] // 'dvc'
 }
 export * from './config'
 
@@ -17,20 +17,18 @@ export const usage = `
 
 感谢您使用我们的插件！请您仔细阅读以下条款，以确保您了解并接受我们的政策：
 
-1. **图片使用**：本插件用于发送由 Stable Diffusion WebUI API 生成的图片。所有图片仅供娱乐和个人使用，不得用于商业目的或侵犯他人的版权。
-2. **隐私保护**：本插件不会收集或保存用户的个人信息。请确保上传到插件的图片不包含敏感或个人隐私信息。
-3. **法律责任**：使用者必须遵守当地法律法规，尤其是关于版权的规定。若因违反相关规定而产生的任何法律后果，均由使用者自行承担。
-4. **禁止不当内容**：严禁使用本插件发送色情、暴力、仇恨言论等非法或不当内容。
-5. **技术支持**：我们不对插件的技术问题承担责任，但会尽力提供支持和维护。
-6. **免责声明更新**：我们保留随时修改本声明的权利，请及时更新插件以获取最新版本的免责声明。**若因未及时更新插件而导致的责任和损失，本方概不负责**。
-7. **解释权归属**：本声明的最终解释权归插件开发者所有。
+1. **隐私保护**：本插件不会收集或保存用户的个人信息。请确保上传到插件的图片不包含敏感或个人隐私信息。
+2. **法律责任**：使用者必须遵守当地法律法规。若因违反相关规定而产生的任何法律后果，均由使用者自行承担。
+3. **技术支持**：我们不对插件的技术问题承担责任，但会尽力提供支持和维护。
+4. **免责声明更新**：我们保留随时修改本声明的权利，请及时更新插件以获取最新版本的免责声明。**若因未及时更新插件而导致的责任和损失，本方概不负责**。
+5. **解释权归属**：本声明的最终解释权归插件开发者所有。
 
 通过使用本插件，即视为**同意上述条款**。请确保您已经仔细阅读并理解以上内容。
 
 ---
 ### 插件功能
 * 功能 1：文/图生图
-* 功能 2：中止生成
+* 功能 2：停止生成
 * 功能 3：HiresFix 部分功能
 * 功能 4：WD1.4 Tagger 部分功能
 * 功能 5：ADetailer 部分功能
@@ -39,11 +37,7 @@ export const usage = `
 * 功能 8：图片审核(测试版)，见 [imgCensor](https://github.com/Kx501/koishi-plugin-imgcensor)
 
 ### 注意事项
-1. 子指令只能直接调用
-2. 默认使用的是秋葉整合包
-3. 翻译服务只测试了 [百度翻译](https://api.fanyi.baidu.com/api/trans/product/desktop)
-4. dvc 只测试了 [DeepSeek](https://github.com/Kx501/koishi-plugin-imgcensor) 效果不错
-5. 默认指令较多，建议在指令管理中个性化配置
+- 子指令不支持链式调用，只能直接调用
 `;
 
 // 插件主函数
@@ -59,8 +53,8 @@ export function apply(ctx: Context, config: Config) {
     else return next();
   }, true /* true 表示这是前置中间件 */)
 
-  const { timeOut, outputMethod: outMeth, maxTasks } = config;
-  const { sampler, scheduler } = config.IMG;
+  const { timeOut, outputMethod: outMeth, maxTasks, sampler, scheduler } = config;
+  // const { sampler, scheduler } = config.IMG;
   const monetary = config.monetary.enable;
   const { enable: censor, endpoint: cEndpoint, labels, threshold: cThreshold } = config.censor;
   const { type: maskType, color, maskShape, maskScale, blurStrength, gradualRatio } = config.censor?.mask ?? {};
@@ -79,7 +73,7 @@ export function apply(ctx: Context, config: Config) {
   const serverStatus = new Map<string, string>();
   const busyServerCounts = new Map<string, number>();
   for (const server of servers) {
-    serverStatus.set(server, 'free'); // 默认所有服务器空闲
+    serverStatus.set(server, 'free'); // 默认所有节点空闲
     busyServerCounts.set(server, 0);
   }
 
@@ -125,10 +119,10 @@ export function apply(ctx: Context, config: Config) {
         if (typeof userAid === 'string') return userAid; // 余额不足
 
         //// 读取配置 ////
-        const { save, imgSize, cfgScale, txt2imgSteps: t2iSteps, img2imgSteps: i2iSteps, maxSteps, prePrompt: preProm, preNegPrompt: preNegProm, restoreFaces: resFaces } = config.IMG;
-        const { enable: enableHiresFix, hrUpscaler, hrSecondPassSteps: hrSteps, denoisingStrength, fixWay } = config.IMG?.hiresFix
+        const { save, imgSize, cfgScale, txt2imgSteps: t2iSteps, img2imgSteps: i2iSteps, maxSteps, prePrompt: preProm, preNegPrompt: preNegProm, restoreFaces: resFaces } = config;
+        const { enable: enableHiresFix, hrUpscaler, hrSecondPassSteps: hrSteps, denoisingStrength, fixWay } = config.hiresFix
         const { type: hiresFixType, hrScale, hrResizeX, hrResizeY } = fixWay ?? {}
-        const adEnable = config.AD.ADetailer.enable;
+        const adEnable = config.ADetailer.enable;
         const useTrans = config.useTranslation.enable;
 
         // 选择服务器
@@ -168,7 +162,7 @@ export function apply(ctx: Context, config: Config) {
         const noPosTags = options?.noPositiveTags;
         const noNegTags = options?.noNegativeTags;
         const Trans = options?.translate && useTrans;
-        const DVC = options?.dvc && config.useDVC.enable;
+        // const DVC = options?.dvc && config.useDVC.enable;
         // const modelName = options?.model;
         // const vaeName = options?.vae;
         const hiresFix = !options?.img2img && options.hiresFix && enableHiresFix;
@@ -181,11 +175,11 @@ export function apply(ctx: Context, config: Config) {
         // 翻译
         let tmpProm = _ || '';
         let tmpNegProm = options?.negative || '';
-        tmpProm = await promptHandle(ctx, session, config, tmpProm, Trans, DVC);
-        tmpNegProm = await promptHandle(ctx, session, config, tmpNegProm, Trans, DVC);
+        tmpProm = await promptHandle(ctx, session, config, tmpProm, Trans); // DVC
+        tmpNegProm = await promptHandle(ctx, session, config, tmpNegProm, Trans); // DVC
 
         // 确定位置
-        let { prompt: prom, negativePrompt: negProm } = config.IMG;
+        let { prompt: prom, negativePrompt: negProm } = config;
 
         if (!noPosTags && prom)
           if (tmpProm === '') tmpProm = prom;
@@ -213,11 +207,11 @@ export function apply(ctx: Context, config: Config) {
             false, // true，直接使用原图
           ];
 
-          await Promise.all(config.AD.ADetailer.models.map(async model => {
+          await Promise.all(config.ADetailer.models.map(async model => {
             log.debug('处理ADetailer参数...');
             // ADetailer翻译
-            let ADPrompt = await promptHandle(ctx, session, config, model.prompt, Trans, DVC);
-            let ADNegPrompt = await promptHandle(ctx, session, config, model.negativePrompt, Trans, DVC);
+            let ADPrompt = await promptHandle(ctx, session, config, model.prompt, Trans); // DVC
+            let ADNegPrompt = await promptHandle(ctx, session, config, model.negativePrompt, Trans); // DVC
 
             const tmpPayload = {
               ad_model: model.name,
@@ -443,7 +437,7 @@ export function apply(ctx: Context, config: Config) {
 
         // Interrogateapi
         async function process(userAid: number) {
-          const { tagger, threshold: wThreshold } = config.WD;
+          const { tagger, threshold: wThreshold } = config;
 
           const payload = {
             image: _,

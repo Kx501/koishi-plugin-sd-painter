@@ -20,27 +20,27 @@ export async function promptHandle(ctx: Context, session: Session, config: Confi
   if (inputStr === '') return '';
 
   const { maxPrompt, excessHandle } = config;
-  const { text: dvcrole, rollbackPrompt, force } = config.useDVC;
+  // const { text: dvcrole, rollbackPrompt, force } = config.useDVC;
 
   //// 格式化 ////
   let text = formatInput(inputStr);
 
 
   //// GPT增强 ////
-  if (dvc || force) {
-    if (!ctx.dvc) throw new Error('请先安装dvc服务');
-    const TransTXT = text.join(','); // 中间量
-    let txt = await ctx.dvc.chat_with_gpt([{
-      role: 'system',
-      content: `${dvcrole}`
-    }, {
-      role: 'user',
-      content: `${TransTXT}`
-    }])
-    log.debug('GPT返回：', txt);
-    if (rollbackPrompt) txt = TransTXT + ',' + txt;
-    text = txt?.split(','); // 不用?会被阻塞
-  }
+  // if (dvc || force) {
+  //   if (!ctx.dvc) throw new Error('请先安装dvc服务');
+  //   const TransTXT = text.join(','); // 中间量
+  //   let txt = await ctx.dvc.chat_with_gpt([{
+  //     role: 'system',
+  //     content: `${dvcrole}`
+  //   }, {
+  //     role: 'user',
+  //     content: `${TransTXT}`
+  //   }])
+  //   log.debug('GPT返回：', txt);
+  //   if (rollbackPrompt) txt = TransTXT + ',' + txt;
+  //   text = txt?.split(','); // 不用?会被阻塞
+  // }
 
 
   //// 翻译环节 ////
