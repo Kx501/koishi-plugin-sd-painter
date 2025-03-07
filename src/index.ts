@@ -93,8 +93,8 @@ export function apply(ctx: Context, config: Config) {
     .option('seed', '-e <number> 随机种子')
     .option('sampler', '-p <name> 采样器')
     .option('scheduler', '-d <name> 调度器')
-    .option('translate', '-t 翻译')
-    .option('dvc', '-v GPT翻译扩写提示词')
+    .option('noTranslate', '-T 翻译')
+    // .option('dvc', '-v GPT翻译扩写提示词')
     .option('hiresFix', '-f 高分辨率修复')
     .option('fixAlgorithm', '-m <name> 修复算法')
     .option('secondPassSteps', '-b <number> 修复步数')
@@ -161,7 +161,7 @@ export function apply(ctx: Context, config: Config) {
         const schName = options?.scheduler || scheduler;
         const noPosTags = options?.noPositiveTags;
         const noNegTags = options?.noNegativeTags;
-        const Trans = options?.translate && useTrans;
+        const Trans = !options?.noTranslate && useTrans;
         // const DVC = options?.dvc && config.useDVC.enable;
         // const modelName = options?.model;
         // const vaeName = options?.vae;
