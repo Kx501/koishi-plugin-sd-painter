@@ -270,13 +270,15 @@ export function apply(ctx: Context, config: Config) {
         log.debug('API请求体:', payload);
 
         if (taskNum === 0) {
-          session.send(Random.pick([
-            '在画了在画了',
-            '你就在此地不要走动，等我给你画一幅',
-            '少女绘画中......',
-            '正在创作中，请稍等片刻',
-            '笔墨已备好，画卷即将展开'
-          ]))
+          if (outMeth !== '极简'){
+            session.send(Random.pick([
+              '在画了在画了',
+              '你就在此地不要走动，等我给你画一幅',
+              '少女绘画中......',
+              '正在创作中，请稍等片刻',
+              '笔墨已备好，画卷即将展开'
+            ]))
+          }
         } else session.send(`在画了在画了，当前 ${taskNum + 1} 个任务......`)
 
         //// 开始请求 ////
@@ -330,7 +332,7 @@ export function apply(ctx: Context, config: Config) {
                 },
               }
 
-              session.send('审核中......');
+              if (outMeth!== '极简') session.send('审核中......');
               response2 = await ctx.http('POST', `${cEndpoint}/detect`, {
                 timeout: timeOut,
                 data: payload3,
@@ -350,7 +352,7 @@ export function apply(ctx: Context, config: Config) {
 
 
             //// 输出 ////
-            if (outMeth === '仅图片') return h.img(imgBuffer, 'image/png');
+            if (outMeth === '普通') return h.img(imgBuffer, 'image/png');
             else {
               msgCol.children.push(h.img(imgBuffer, 'image/png'));
               msgCol.children.push(h('message', attrs, `使用 ${servers.indexOf(endpoint)}号 服务器`));
@@ -840,7 +842,7 @@ export function apply(ctx: Context, config: Config) {
     log.debug('调试1', error.name);
     log.debug('调试2', error.message);
     log.debug('调试3', error.cause);
-    log.debug('调试4', error.cause.cause.code);
+    log.debug('调试4', error.cause?.cause?.code);
 
     for (let str of ['Gateway', 'fetch']) {
       if (detail.includes(str)) {

@@ -198,7 +198,7 @@ export const Config: Schema<Config> = Schema.intersect([
     ]),
   }).description('反推设置'),
   Schema.object({
-    outputMethod: Schema.union(['仅图片', '关键信息', '详细信息']).default('仅图片').description('输出方式，"详细信息"仅用于调试，且*审核将失效*'),
+    outputMethod: Schema.union(['极简', '普通', '关键信息', '详细信息']).default('普通').description('输出方式，"详细信息"仅用于调试，且*审核将失效*'),
     maxPrompt: Schema.number().min(0).max(200).step(1).role('slider').default(0).description('最大提示词数限制，设置为0关闭'),
     excessHandle: Schema.union(['仅提示', '从前删除', '从后删除']).default('从后删除').description('提示词超限处理'),
     setConfig: Schema.boolean().default(false).description('启用指令修改SD全局设置').experimental(),

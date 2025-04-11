@@ -1,7 +1,7 @@
 {
 	"name": "@kx501/koishi-plugin-sd-painter",
 	"description": "简单对接 SD WebUI 实现部分功能",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"main": "lib/index.js",
 	"typings": "lib/index.d.ts",
 	"files": [
@@ -42,9 +42,5 @@
 		},
 		"preview": true,
 		"hidden": true
-	},
-	"publishConfig": {
-		"access": "public",
-		"registry": "https://registry.npmjs.org/"
 	}
 }
