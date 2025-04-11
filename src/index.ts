@@ -352,7 +352,7 @@ export function apply(ctx: Context, config: Config) {
 
 
             //// 输出 ////
-            if (outMeth === '普通') return h.img(imgBuffer, 'image/png');
+            if (outMeth === '普通' || '极简') return h.img(imgBuffer, 'image/png');
             else {
               msgCol.children.push(h.img(imgBuffer, 'image/png'));
               msgCol.children.push(h('message', attrs, `使用 ${servers.indexOf(endpoint)}号 服务器`));
