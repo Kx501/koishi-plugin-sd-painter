@@ -270,7 +270,7 @@ export function apply(ctx: Context, config: Config) {
         log.debug('API请求体:', payload);
 
         if (taskNum === 0) {
-          if (outMeth !== '极简'){
+          if (outMeth !== '极简') {
             session.send(Random.pick([
               '在画了在画了',
               '你就在此地不要走动，等我给你画一幅',
@@ -332,7 +332,7 @@ export function apply(ctx: Context, config: Config) {
                 },
               }
 
-              if (outMeth!== '极简') session.send('审核中......');
+              if (outMeth !== '极简') session.send('审核中......');
               response2 = await ctx.http('POST', `${cEndpoint}/detect`, {
                 timeout: timeOut,
                 data: payload3,
